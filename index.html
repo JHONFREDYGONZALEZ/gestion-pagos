@@ -213,7 +213,7 @@
             <option value="">Todos los estados</option>
             <option>Pendiente</option><option>Pagada</option>
           </select>
-          <select id="filtroEmpresa" onchange="renderTabla()" style="width:160px;">
+          <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla()" style="width:160px;">
             <option value="">Todos los pagadores</option>
           </select>
           <select id="filtroProyecto" onchange="renderTabla()" style="width:160px;">
@@ -705,16 +705,24 @@ function actualizarSelectEmpresas() {
   const fProy = document.getElementById('filtroProyecto');
   if (fProy) {
     const v = fProy.value;
-    const todos = [...new Set(pagos.map(p=>p.proyecto_id))];
-    const proys = proyectos.filter(p=>todos.includes(p.id));
+    const empFiltrada = document.getElementById('filtroEmpresa')?.value;
+    // Si hay empresa seleccionada, mostrar solo sus proyectos; si no, todos únicos
+    const proys = empFiltrada
+      ? proyectos.filter(p=>String(p.empresa_id)==empFiltrada)
+      : proyectos.filter((p,i,a)=>a.findIndex(x=>x.nombre===p.nombre)===i); // únicos por nombre
     fProy.innerHTML = '<option value="">Todos los proyectos</option>' +
-      proys.map(p=>`<option value="${p.id}"${p.id==v?' selected':''}>${p.nombre}</option>`).join('');
+      proys.sort((a,b)=>a.nombre.localeCompare(b.nombre))
+           .map(p=>`<option value="${p.id}"${p.id==v?' selected':''}>${p.nombre}</option>`).join('');
   }
   // formularios
   const fF = document.getElementById('f-empresa');
   if(fF) fF.innerHTML='<option value="">Seleccionar pagador...</option>'+empresas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
-  const eF = document.getElementById('e-empresa');
-  if(eF) eF.innerHTML=empresas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+  const filtTipo=document.getElementById('filtroTipo');
+  if(filtTipo){
+    const ftv=filtTipo.value;
+    const todosTipos=[...new Set(pagos.map(p=>p.tipo).filter(Boolean))].sort();
+    filtTipo.innerHTML='<option value="">Todos los tipos de pago</option>'+todosTipos.map(t=>`<option value="${t}"${t===ftv?' selected':''}>${t}</option>`).join('');
+  }
 }
 
 function onEmpresaChange() {
