@@ -1,1 +1,1208 @@
-SUPABASE_TEST
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestión de Pagos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.x/tabler-icons.min.css">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+  /* ── TOKENS ─────────────────────────────────────── */
+  :root{
+    --accent:#534AB7;--accent2:#1D9E75;--danger:#E53E3E;--warn:#BA7517;
+    --bg:#F7F7FA;--surface:#FFFFFF;--bg2:#F0F0F5;
+    --border:#E2E2E8;--border2:#EBEBF0;
+    --text:#18181B;--text2:#52525B;--text3:#A1A1AA;
+    --radius:8px;--radius-lg:12px;
+    --shadow:0 1px 4px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.05);
+    --accent-light:#EEEDFE;--green:#27500A;--green-bg:#EAF3DE;
+    --orange:#633806;--orange-bg:#FAEEDA;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;}
+
+  /* ── LOGIN ──────────────────────────────────────── */
+  #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
+  .login-card{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:40px 36px;width:100%;max-width:400px;}
+  .login-logo{text-align:center;margin-bottom:28px;}
+  .login-logo h1{font-size:22px;font-weight:700;color:var(--accent);margin-top:8px;}
+  .login-logo p{font-size:13px;color:var(--text3);margin-top:4px;}
+  .form-field{margin-bottom:16px;}
+  .form-field label{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;}
+  .form-field input{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;outline:none;transition:border .15s;background:var(--surface);}
+  .form-field input:focus{border-color:var(--accent);}
+  .btn-login{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;}
+  .btn-login:hover{opacity:.9;}
+  .login-error{font-size:13px;color:var(--danger);text-align:center;margin-top:10px;display:none;}
+
+  /* ── APP SHELL ──────────────────────────────────── */
+  #app-screen{display:none;min-height:100vh;flex-direction:column;}
+  .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:54px;position:sticky;top:0;z-index:100;}
+  .topbar-brand{font-size:15px;font-weight:700;color:var(--accent);margin-right:8px;}
+  .topbar-tabs{display:flex;gap:2px;flex:1;}
+  .tab{padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;color:var(--text2);border:none;background:none;transition:all .15s;}
+  .tab:hover{background:var(--bg2);}
+  .tab.active{background:var(--accent-light);color:var(--accent);}
+  .topbar-user{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);}
+  .role-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--accent-light);color:var(--accent);}
+  .btn-logout{padding:5px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;background:none;color:var(--text2);}
+
+  /* ── MAIN CONTENT ───────────────────────────────── */
+  main{flex:1;padding:20px 24px;max-width:1400px;margin:0 auto;width:100%;}
+  .section{display:none;}
+  .section.active{display:block;}
+
+  /* ── CARDS ──────────────────────────────────────── */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;box-shadow:var(--shadow);}
+  .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
+  .card-title{font-size:15px;font-weight:600;}
+
+  /* ── BOTONES ────────────────────────────────────── */
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;background:var(--surface);color:var(--text);transition:all .15s;}
+  .btn:hover{background:var(--bg2);}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.primary:hover{opacity:.9;}
+  .btn.danger{background:var(--danger);color:#fff;border-color:var(--danger);}
+  .btn-sm{padding:4px 8px;border-radius:6px;border:1px solid var(--border);cursor:pointer;font-size:12px;background:var(--surface);color:var(--text2);display:inline-flex;align-items:center;gap:4px;}
+  .btn-sm:hover{background:var(--bg2);}
+  .btn-sm.approve{background:var(--green-bg);color:var(--green);border-color:#b7dca4;}
+  .btn-sm.del{color:var(--danger);}
+  .btn-sm:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ── FILTROS ────────────────────────────────────── */
+  .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .filters input,.filters select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--surface);outline:none;height:34px;}
+  .filters input:focus,.filters select:focus{border-color:var(--accent);}
+
+  /* ── TABLA ──────────────────────────────────────── */
+  .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{padding:9px 12px;background:var(--bg2);font-weight:600;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
+  td{padding:8px 12px;border-bottom:1px solid var(--border2);vertical-align:middle;}
+  tr:last-child td{border-bottom:none;}
+  tr:hover td{background:var(--bg2);}
+  .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .actions-cell{display:flex;gap:4px;align-items:center;}
+
+  /* ── BADGES ─────────────────────────────────────── */
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+  .badge.pagada{background:var(--green-bg);color:var(--green);}
+  .badge.pendiente{background:var(--orange-bg);color:var(--orange);}
+  .cod-tag{font-family:monospace;font-size:11px;background:var(--bg2);padding:2px 6px;border-radius:4px;border:1px solid var(--border2);}
+  .cod-tag.empty{color:var(--text3);border-style:dashed;}
+
+  /* ── STATS ───────────────────────────────────────── */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;}
+  .stat-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;}
+  .stat-value{font-size:22px;font-weight:700;}
+  .stat-value.accent{color:var(--accent);}
+  .stat-value.green{color:var(--green);}
+  .stat-value.orange{color:var(--orange);}
+
+  /* ── MODALES ─────────────────────────────────────── */
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:20px;}
+  .modal-bg.open{display:flex;}
+  .modal{background:var(--surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18);}
+  .modal-title{font-size:16px;font-weight:700;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .form-group{display:flex;flex-direction:column;gap:5px;}
+  .form-group.full{grid-column:1/-1;}
+  .form-group label{font-size:12px;font-weight:500;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;}
+  .form-group input,.form-group select,.form-group textarea{padding:8px 11px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;outline:none;background:var(--surface);color:var(--text);}
+  .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent);}
+  .divider{height:1px;background:var(--border);margin:16px 0;}
+  .info-box{background:var(--accent-light);border:1px solid #c5c1f0;border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--accent);display:flex;gap:8px;align-items:flex-start;margin-top:12px;}
+  .notice{font-size:11px;color:var(--text3);margin-top:3px;}
+
+  /* ── TOTAL FILTRADO ──────────────────────────────── */
+  #fila-total-valor{background:var(--accent-light);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 16px;margin-bottom:12px;}
+
+  /* ── LOADING ─────────────────────────────────────── */
+  #loading{position:fixed;inset:0;background:rgba(247,247,250,.85);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-size:14px;color:var(--text2);}
+  .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ── EMPTY STATE ─────────────────────────────────── */
+  #empty{display:none;padding:40px;text-align:center;color:var(--text3);}
+
+  /* ── ADMIN USUARIOS ──────────────────────────────── */
+  .user-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+  .user-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;}
+
+  /* ── RESPONSIVE ──────────────────────────────────── */
+  @media(max-width:768px){
+    .stats{grid-template-columns:1fr 1fr;}
+    .form-grid{grid-template-columns:1fr;}
+    .topbar-tabs .tab span{display:none;}
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading"><div class="spinner"></div><span>Cargando...</span></div>
+
+<!-- LOGIN -->
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <div class="login-logo">
+      <div style="font-size:36px;">💰</div>
+      <h1>Gestión de Pagos</h1>
+      <p>Ingresa con tu cuenta corporativa</p>
+    </div>
+    <div class="form-field">
+      <label>Correo electrónico</label>
+      <input type="email" id="login-email" placeholder="usuario@empresa.com" autocomplete="email">
+    </div>
+    <div class="form-field">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn-login" onclick="loginUser()">Ingresar</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none;flex-direction:column;">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <span class="topbar-brand">💰 Pagos</span>
+    <div class="topbar-tabs" id="topbar-tabs">
+      <button class="tab active" onclick="showTab('tab-pagos',this)"><i class="ti ti-list"></i> <span>Pagos</span></button>
+      <button class="tab" onclick="showTab('tab-gastos',this)"><i class="ti ti-chart-bar"></i> <span>Gastos</span></button>
+      <button class="tab" id="tab-btn-admin" style="display:none;" onclick="showTab('tab-admin',this)"><i class="ti ti-users"></i> <span>Usuarios</span></button>
+    </div>
+    <div class="topbar-right" style="display:flex;align-items:center;gap:12px;margin-left:auto;">
+      <button class="btn" onclick="openModal('modalImport')" id="btn-importar" style="display:none;"><i class="ti ti-upload"></i> Importar</button>
+      <button class="btn" onclick="exportarExcel()"><i class="ti ti-download"></i> Exportar</button>
+      <button class="btn primary" onclick="openModal('modalNuevo')" id="btn-nuevo" style="display:none;"><i class="ti ti-plus"></i> Nuevo pago</button>
+      <div class="topbar-user">
+        <span id="user-nombre"></span>
+        <span class="role-badge" id="user-rol-badge"></span>
+        <button class="btn-logout" onclick="logoutUser()"><i class="ti ti-logout"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- ═══ PESTAÑA PAGOS ═══ -->
+    <section id="tab-pagos" class="section active">
+      <div class="stats" id="stats-bar">
+        <div class="stat"><div class="stat-label">Total egresos</div><div class="stat-value accent" id="st-total">0</div></div>
+        <div class="stat"><div class="stat-label">Pendientes</div><div class="stat-value orange" id="st-pendientes">0</div></div>
+        <div class="stat"><div class="stat-label">Pagados</div><div class="stat-value green" id="st-pagados">0</div></div>
+        <div class="stat"><div class="stat-label">Valor total</div><div class="stat-value accent" id="st-valor" style="font-size:15px;">$0</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Registro de egresos</span>
+        </div>
+        <div class="filters" id="filtros-bar">
+          <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla()" style="width:160px;">
+          <input type="text" placeholder="🏦 Cód Banco..." id="filtroCod" oninput="renderTabla()" style="width:160px;">
+          <input type="text" placeholder="👤 Nombre..." id="filtroNombre" oninput="renderTabla()" style="width:160px;">
+          <select id="filtroEstado" onchange="renderTabla()" style="width:160px;">
+            <option value="">Todos los estados</option>
+            <option>Pendiente</option><option>Pagada</option>
+          </select>
+          <select id="filtroEmpresa" onchange="renderTabla()" style="width:160px;">
+            <option value="">Todos los pagadores</option>
+          </select>
+          <select id="filtroProyecto" onchange="renderTabla()" style="width:160px;">
+            <option value="">Todos los proyectos</option>
+          </select>
+          <select id="filtroConcepto" onchange="renderTabla()" style="width:160px;">
+            <option value="">Todos los conceptos</option>
+            <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
+            <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
+            <option>Apoyo Admtivo</option><option>Gastos Legales</option>
+          </select>
+          <select id="filtroTipo" onchange="renderTabla()" style="width:160px;">
+            <option value="">Todos los tipos de pago</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
+            <input type="date" id="filtroFechaDesde" onchange="renderTabla()" style="width:160px;">
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">hasta
+            <input type="date" id="filtroFechaHasta" onchange="renderTabla()" style="width:160px;">
+          </label>
+        </div>
+
+        <div id="fila-total-valor" style="display:none;align-items:center;justify-content:space-between;padding:10px 16px;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--accent);">
+            <i class="ti ti-calculator"></i><span>Suma de <strong>Valor</strong> filtrado</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="total-valor-cant" style="font-size:12px;color:var(--text2);"></span>
+            <span id="total-valor-monto" style="font-size:16px;font-weight:600;color:var(--accent);"></span>
+          </div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>No. egreso</th><th>Fecha creación</th><th>Pagador</th><th>Proyecto</th>
+              <th>Concepto</th><th>Id tercero</th><th>Nombre tercero</th>
+              <th>Nombre a quien se pagó</th><th>Tipo de pago</th><th>Valor</th>
+              <th>Fecha de pago</th><th>Cód Banco</th><th>Estado</th>
+              <th>Comentario</th><th>Acciones</th>
+            </tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div id="empty"><i class="ti ti-inbox" style="font-size:32px;"></i><br>Sin registros</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══ PESTAÑA GASTOS ═══ -->
+    <section id="tab-gastos" class="section">
+      <div id="gastos-body"></div>
+    </section>
+
+    <!-- ═══ PESTAÑA ADMIN ═══ -->
+    <section id="tab-admin" class="section">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Gestión de usuarios</span>
+          <button class="btn primary" onclick="openModal('modalUsuario')"><i class="ti ti-user-plus"></i> Crear usuario</button>
+        </div>
+        <div class="user-grid" id="users-grid"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══ MODALES ═══ -->
+
+<!-- NUEVO PAGO -->
+<div class="modal-bg" id="modalNuevo">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-title"><i class="ti ti-plus"></i> Nuevo pago</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Pagador *</label>
+        <select id="f-empresa" onchange="onEmpresaChange()"><option value="">Seleccionar pagador...</option></select></div>
+      <div class="form-group"><label>Proyecto *</label>
+        <select id="f-proyecto" disabled><option value="">Primero seleccione pagador</option></select></div>
+      <div class="form-group"><label>Concepto *</label>
+        <select id="f-concepto">
+          <option value="">Seleccionar concepto...</option>
+          <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
+          <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
+          <option>Apoyo Admtivo</option><option>Gastos Legales</option>
+        </select></div>
+      <div class="form-group"><label>Identificación del tercero *</label>
+        <input type="text" id="f-idtercero" placeholder="NIT / CC" inputmode="numeric" oninput="fmtIdInput(this);autocompletarTercero()">
+        <span class="notice" id="f-idtercero-hint" style="display:none;color:var(--accent2);"></span></div>
+      <div class="form-group"><label>Nombre tercero *</label>
+        <input type="text" id="f-nombretercero" placeholder="Razón social o nombre completo"></div>
+      <div class="form-group"><label>Nombre a quien se pagó *</label>
+        <input type="text" id="f-nombrepago" placeholder="Beneficiario del pago"></div>
+      <div class="form-group"><label>Tipo de pago *</label>
+        <select id="f-tipo">
+          <option value="">Seleccionar...</option>
+          <option>Prov Tranferencia</option><option>Prov PSE</option><option>Caja</option>
+          <option>Anticipo</option><option>Préstamo</option><option>Viáticos</option>
+          <option>Reembolso</option><option>Nomina</option><option>Crédito</option><option>Provisión</option>
+        </select></div>
+      <div class="form-group"><label>Valor *</label>
+        <input type="text" id="f-valor" placeholder="0" inputmode="numeric" oninput="fmtIdInput(this)"></div>
+      <div class="form-group"><label>Cód Banco</label>
+        <input type="text" id="f-bancolombia" style="font-family:monospace;" placeholder="Ej: 20260614-00123"></div>
+      <div class="form-group"><label>Número de egreso</label>
+        <input type="text" id="f-egreso" placeholder="Al contabilizar"></div>
+      <div class="form-group full"><label>Comentario</label>
+        <textarea id="f-comentario" rows="2" placeholder="Observaciones..." style="resize:vertical;font-family:inherit;font-size:13px;"></textarea></div>
+    </div>
+    <div class="info-box"><i class="ti ti-info-circle"></i> La fecha de pago se registra cuando Gerencia aprueba.</div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalNuevo')">Cancelar</button>
+      <button class="btn primary" onclick="guardarPago()"><i class="ti ti-check"></i> Guardar pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDITAR PAGO -->
+<div class="modal-bg" id="modalEditar">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-title"><i class="ti ti-pencil"></i> Editar pago <span id="edit-titulo" style="font-weight:400;color:var(--text2);font-size:14px;"></span></div>
+    <div id="edit-pagada-aviso" style="display:none;background:var(--green-bg);border:1px solid #b7dca4;border-radius:var(--radius);padding:9px 13px;font-size:12px;color:var(--green);margin-bottom:12px;display:flex;gap:7px;align-items:center;">
+      <i class="ti ti-lock"></i> Este egreso está <strong>Pagado</strong>. Solo se puede modificar la fecha de pago y el Cód Banco.
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Pagador *</label><select id="e-empresa" onchange="onEmpresaChangeEdit()"></select></div>
+      <div class="form-group"><label>Proyecto *</label><select id="e-proyecto"></select></div>
+      <div class="form-group"><label>Concepto *</label>
+        <select id="e-concepto">
+          <option value="">Seleccionar...</option>
+          <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
+          <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
+          <option>Apoyo Admtivo</option><option>Gastos Legales</option>
+        </select></div>
+      <div class="form-group"><label>Identificación del tercero *</label>
+        <input type="text" id="e-idtercero" inputmode="numeric" oninput="fmtIdInput(this)"></div>
+      <div class="form-group"><label>Nombre tercero *</label><input type="text" id="e-nombretercero"></div>
+      <div class="form-group"><label>Nombre a quien se pagó *</label><input type="text" id="e-nombrepago"></div>
+      <div class="form-group"><label>Tipo de pago *</label>
+        <select id="e-tipo">
+          <option>Prov Tranferencia</option><option>Prov PSE</option><option>Caja</option>
+          <option>Anticipo</option><option>Préstamo</option><option>Viáticos</option>
+          <option>Reembolso</option><option>Nomina</option><option>Crédito</option><option>Provisión</option>
+        </select></div>
+      <div class="form-group"><label>Valor *</label><input type="text" id="e-valor" inputmode="numeric" oninput="fmtIdInput(this)"></div>
+      <div class="form-group"><label>Cód Banco</label><input type="text" id="e-bancolombia" style="font-family:monospace;"></div>
+      <div class="form-group"><label>Número de egreso</label><input type="text" id="e-egreso"></div>
+      <div class="form-group"><label>Fecha de pago</label>
+        <input type="date" id="e-fechapago">
+        <span class="notice">Se asigna automáticamente al aprobar gerencia.</span></div>
+      <div class="form-group full"><label>Comentario</label>
+        <textarea id="e-comentario" rows="2" style="resize:vertical;font-family:inherit;font-size:13px;"></textarea></div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalEditar')">Cancelar</button>
+      <button class="btn primary" onclick="guardarEdicion()"><i class="ti ti-check"></i> Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<!-- APROBACIONES -->
+<div class="modal-bg" id="modalAprobacion">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title"><i class="ti ti-shield-check"></i> Aprobaciones <span id="apro-titulo" style="font-weight:400;color:var(--text2);font-size:14px;"></span></div>
+    <div id="apro-body"></div>
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalAprobacion')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORTAR -->
+<div class="modal-bg" id="modalImport">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title"><i class="ti ti-upload"></i> Importar Excel</div>
+    <div style="border:2px dashed var(--border);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;" onclick="document.getElementById('fileInput').click()">
+      <i class="ti ti-file-spreadsheet" style="font-size:32px;color:var(--accent);"></i>
+      <div style="margin-top:8px;font-size:14px;font-weight:500;">Seleccionar archivo Excel</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px;">Archivos .xlsx o .xls</div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;" onchange="handleFile(event)">
+    <div id="import-status" style="margin-top:12px;font-size:13px;text-align:center;min-height:20px;"></div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalImport')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CREAR USUARIO (admin) -->
+<div class="modal-bg" id="modalUsuario">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-title"><i class="ti ti-user-plus"></i> Crear usuario</div>
+    <div class="form-grid">
+      <div class="form-group full"><label>Nombre completo *</label>
+        <input type="text" id="u-nombre" placeholder="Nombre y apellido"></div>
+      <div class="form-group full"><label>Correo electrónico *</label>
+        <input type="email" id="u-email" placeholder="correo@empresa.com"></div>
+      <div class="form-group full"><label>Contraseña temporal *</label>
+        <input type="password" id="u-pass" placeholder="Mínimo 8 caracteres"></div>
+      <div class="form-group full"><label>Rol *</label>
+        <select id="u-rol">
+          <option value="pagador">Pagador</option>
+          <option value="profesional">Profesional (aprobador)</option>
+          <option value="gerencia">Gerencia</option>
+          <option value="admin">Administrador</option>
+        </select></div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalUsuario')">Cancelar</button>
+      <button class="btn primary" onclick="crearUsuario()"><i class="ti ti-check"></i> Crear usuario</button>
+    </div>
+  </div>
+</div>
+
+<!-- DUPLICADO -->
+<div class="modal-bg" id="modalDuplicado">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title"><i class="ti ti-alert-triangle" style="color:var(--warn);"></i> Posible pago duplicado</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:1rem;">Ya existe un pago para este tercero con el mismo valor:</div>
+    <div style="background:var(--orange-bg);border:1px solid #F0C68A;border-radius:var(--radius);padding:14px;font-size:13px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;">No. egreso</div><strong id="dup-egreso"></strong></div>
+      <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Fecha creación</div><strong id="dup-fecha"></strong></div>
+      <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Pagador</div><strong id="dup-pagador"></strong></div>
+      <div><div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Proyecto</div><strong id="dup-proyecto"></strong></div>
+      <div style="grid-column:1/-1;"><div style="font-size:11px;color:var(--text3);text-transform:uppercase;">Valor</div><strong id="dup-valor"></strong></div>
+    </div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalDuplicado')"><i class="ti ti-x"></i> Desistir</button>
+      <button class="btn primary" onclick="confirmarGuardarPago()"><i class="ti ti-check"></i> Continuar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// CONFIGURACIÓN SUPABASE
+// ═══════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://zcrwgoydzuqocwrpcrld.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjcndnb3lkenVxb2N3cnBjcmxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4ODEzNTYsImV4cCI6MjA5OTQ1NzM1Nn0.gHDb5ZJFN-APN6w10F9zpyVCQwVo3pAU5BbG4wuz13o'; // ← reemplazar con tu anon key
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ═══════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════
+let currentUser = null;
+let currentPerfil = null;
+let pagos = [];
+let empresas = [];
+let proyectos = [];
+let presupuestos = [];
+let editandoId = null;
+let _guardandoEdicion = false;
+let _pagoPendienteGuardar = null;
+let aprobacionId = null;
+
+const CONCEPTOS = ['Mano de Obra','Ferretería','Madera','Material Pétreo','Transporte','Alq Maq','Apoyo Admtivo','Gastos Legales'];
+const TIPOS = ['Prov Tranferencia','Prov PSE','Caja','Anticipo','Préstamo','Viáticos','Reembolso','Nomina','Crédito','Provisión'];
+
+// ═══════════════════════════════════════════════════════════
+// ARRANQUE
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    await iniciarApp(session.user);
+  } else {
+    showLogin();
+  }
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      await iniciarApp(session.user);
+    } else if (event === 'SIGNED_OUT') {
+      showLogin();
+    }
+  });
+});
+
+function showLogin() {
+  hide('loading'); hide('app-screen'); show('login-screen');
+}
+
+async function iniciarApp(user) {
+  currentUser = user;
+  hide('login-screen');
+
+  // cargar perfil
+  const { data: perfil } = await sb.from('perfiles').select('*').eq('id', user.id).single();
+  currentPerfil = perfil;
+
+  // configurar UI según rol
+  document.getElementById('user-nombre').textContent = perfil?.nombre || user.email;
+  document.getElementById('user-rol-badge').textContent = perfil?.rol || 'usuario';
+
+  const esPagador = perfil?.rol === 'pagador';
+  const esAdmin = perfil?.rol === 'admin';
+  const esGerencia = perfil?.rol === 'gerencia';
+
+  if (esPagador || esAdmin) {
+    show('btn-nuevo'); show('btn-importar');
+  }
+  if (esAdmin || esGerencia) {
+    document.getElementById('tab-btn-admin').style.display = 'inline-flex';
+  }
+
+  // cargar datos
+  await Promise.all([cargarEmpresas(), cargarPagos()]);
+  renderStats();
+  renderTabla();
+  actualizarSelectEmpresas();
+  hide('loading');
+  show('app-screen');
+}
+
+// ═══════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════
+async function loginUser() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+
+  if (!email || !pass) { errEl.textContent = 'Ingresa tu correo y contraseña.'; errEl.style.display = 'block'; return; }
+
+  show('loading');
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) {
+    hide('loading');
+    errEl.textContent = 'Correo o contraseña incorrectos.';
+    errEl.style.display = 'block';
+  }
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') loginUser();
+  if (e.key === 'Escape') { const m = document.querySelector('.modal-bg.open'); if (m) closeModal(m.id); }
+});
+
+async function logoutUser() {
+  await sb.auth.signOut();
+}
+
+async function crearUsuario() {
+  const nombre = document.getElementById('u-nombre').value.trim();
+  const email = document.getElementById('u-email').value.trim();
+  const pass = document.getElementById('u-pass').value;
+  const rol = document.getElementById('u-rol').value;
+
+  if (!nombre || !email || !pass) { alert('Completa todos los campos.'); return; }
+  if (pass.length < 8) { alert('La contraseña debe tener al menos 8 caracteres.'); return; }
+
+  show('loading');
+  // Crear usuario en Supabase Auth (requiere service role key en producción — usar Edge Function)
+  // Por ahora usamos signup + metadata
+  const { data, error } = await sb.auth.signUp({
+    email, password: pass,
+    options: { data: { nombre, rol } }
+  });
+
+  hide('loading');
+  if (error) { alert('Error al crear usuario: ' + error.message); return; }
+
+  // Actualizar rol en perfiles (el trigger lo crea, luego actualizamos el rol)
+  if (data.user) {
+    await sb.from('perfiles').update({ nombre, rol }).eq('id', data.user.id);
+  }
+
+  closeModal('modalUsuario');
+  alert(`✓ Usuario "${nombre}" creado. Recibirá un correo de confirmación.`);
+  cargarUsuarios();
+}
+
+async function cargarUsuarios() {
+  const { data } = await sb.from('perfiles').select('*').order('nombre');
+  const grid = document.getElementById('users-grid');
+  if (!grid) return;
+  const colores = { admin:'#534AB7', gerencia:'#1D9E75', profesional:'#185FA5', pagador:'#BA7517' };
+  grid.innerHTML = (data || []).map(u => `
+    <div class="user-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <div style="font-weight:600;">${u.nombre}</div>
+          <div style="font-size:12px;color:var(--text3);">${u.email}</div>
+        </div>
+        <span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${colores[u.rol]||'#ccc'}22;color:${colores[u.rol]||'#666'};">${u.rol}</span>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <select onchange="cambiarRol('${u.id}',this.value)" style="flex:1;font-size:12px;padding:4px;">
+          ${['pagador','profesional','gerencia','admin'].map(r=>`<option value="${r}"${r===u.rol?' selected':''}>${r}</option>`).join('')}
+        </select>
+        <button class="btn-sm" onclick="toggleActivo('${u.id}',${u.activo})" style="color:${u.activo?'var(--danger)':'var(--accent2)'};">
+          ${u.activo?'Desactivar':'Activar'}
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function cambiarRol(id, rol) {
+  await sb.from('perfiles').update({ rol }).eq('id', id);
+}
+async function toggleActivo(id, activo) {
+  await sb.from('perfiles').update({ activo: !activo }).eq('id', id);
+  cargarUsuarios();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CARGA DE DATOS
+// ═══════════════════════════════════════════════════════════
+async function cargarEmpresas() {
+  const { data: emps } = await sb.from('empresas').select('*').order('nombre');
+  empresas = emps || [];
+  const { data: proys } = await sb.from('proyectos').select('*').order('nombre');
+  proyectos = proys || [];
+  const { data: pres } = await sb.from('presupuestos_concepto').select('*');
+  presupuestos = pres || [];
+}
+
+async function cargarPagos() {
+  const { data } = await sb
+    .from('pagos')
+    .select(`*, empresa:empresa_id(nombre), proyecto:proyecto_id(nombre)`)
+    .order('created_at', { ascending: false });
+  pagos = (data || []).map(p => ({
+    ...p,
+    empresaNombre: p.empresa?.nombre || '',
+    proyectoNombre: p.proyecto?.nombre || '',
+  }));
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS UI
+// ═══════════════════════════════════════════════════════════
+function show(id) { const el=document.getElementById(id); if(el){ el.style.display = el.id==='app-screen'?'flex':'block'; }}
+function hide(id) { const el=document.getElementById(id); if(el) el.style.display='none'; }
+function g(id) { return document.getElementById(id)?.value?.trim()||''; }
+function fmt(n) { return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0); }
+function fmtDate(d) { if(!d) return '—'; try { return new Date(d+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'}); } catch(e){return d;} }
+function capitalizar(s) { if(!s)return''; return s.toLowerCase().replace(/(^\s*\S)|(\s+\S)/g,c=>c.toUpperCase()); }
+function capitalizarFrase(s) { if(!s)return''; const t=s.trim(); return t.charAt(0).toUpperCase()+t.slice(1).toLowerCase(); }
+function fmtIdInput(el) {
+  const raw=el.value.replace(/\D/g,'');
+  el.value=raw?new Intl.NumberFormat('es-CO').format(parseInt(raw)):''
+}
+function normalizarConcepto(raw){
+  if(!raw)return'';
+  const s=raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  if(s.includes('mano')&&s.includes('obra')) return 'Mano de Obra';
+  if(s.includes('ferret'))                   return 'Ferretería';
+  if(s.includes('madera'))                   return 'Madera';
+  if(s.includes('petr'))                     return 'Material Pétreo';
+  if(s.includes('transport'))                return 'Transporte';
+  if(s.includes('alq')||s.includes('maq'))   return 'Alq Maq';
+  if(s.includes('apoyo')||s.includes('admin')||s.includes('oficina')) return 'Apoyo Admtivo';
+  if(s.includes('legal'))                    return 'Gastos Legales';
+  return raw.trim();
+}
+function badgeHTML(estado) {
+  return `<span class="badge ${estado==='Pagada'?'pagada':'pendiente'}">${estado}</span>`;
+}
+function codHTML(c) {
+  return c?`<span class="cod-tag">${c}</span>`:`<span class="cod-tag empty">Sin código</span>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════
+function renderStats() {
+  document.getElementById('st-total').textContent = pagos.length;
+  document.getElementById('st-pendientes').textContent = pagos.filter(p=>p.estado==='Pendiente').length;
+  document.getElementById('st-pagados').textContent = pagos.filter(p=>p.estado==='Pagada').length;
+  document.getElementById('st-valor').textContent = fmt(pagos.reduce((s,p)=>s+p.valor,0));
+}
+
+// ═══════════════════════════════════════════════════════════
+// TABLA
+// ═══════════════════════════════════════════════════════════
+function actualizarSelectEmpresas() {
+  const fEmp = document.getElementById('filtroEmpresa');
+  if (fEmp) {
+    const v = fEmp.value;
+    fEmp.innerHTML = '<option value="">Todos los pagadores</option>' +
+      empresas.map(e=>`<option value="${e.id}"${e.id==v?' selected':''}>${e.nombre}</option>`).join('');
+  }
+  const fProy = document.getElementById('filtroProyecto');
+  if (fProy) {
+    const v = fProy.value;
+    const todos = [...new Set(pagos.map(p=>p.proyecto_id))];
+    const proys = proyectos.filter(p=>todos.includes(p.id));
+    fProy.innerHTML = '<option value="">Todos los proyectos</option>' +
+      proys.map(p=>`<option value="${p.id}"${p.id==v?' selected':''}>${p.nombre}</option>`).join('');
+  }
+  // formularios
+  const fF = document.getElementById('f-empresa');
+  if(fF) fF.innerHTML='<option value="">Seleccionar pagador...</option>'+empresas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+  const eF = document.getElementById('e-empresa');
+  if(eF) eF.innerHTML=empresas.map(e=>`<option value="${e.id}">${e.nombre}</option>`).join('');
+}
+
+function onEmpresaChange() {
+  const empId = g('f-empresa');
+  const sel = document.getElementById('f-proyecto');
+  const proys = proyectos.filter(p=>p.empresa_id==empId);
+  sel.disabled = !empId;
+  sel.innerHTML = empId
+    ? '<option value="">Seleccionar proyecto...</option>' + proys.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('')
+    : '<option value="">Primero seleccione pagador</option>';
+}
+
+function onEmpresaChangeEdit() {
+  const empId = g('e-empresa');
+  const sel = document.getElementById('e-proyecto');
+  const proys = proyectos.filter(p=>p.empresa_id==empId);
+  sel.innerHTML = proys.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
+}
+
+function renderTabla() {
+  const q = document.getElementById('buscar').value.toLowerCase();
+  const fe = g('filtroEstado');
+  const femp = g('filtroEmpresa');
+  const fcod = document.getElementById('filtroCod').value.trim().toLowerCase();
+  const fnombre = document.getElementById('filtroNombre').value.trim().toLowerCase();
+  const fproy = g('filtroProyecto');
+  const fconcepto = g('filtroConcepto');
+  const ftipo = g('filtroTipo');
+  const ffDesde = g('filtroFechaDesde');
+  const ffHasta = g('filtroFechaHasta');
+  const hayFiltro = !!(q||fe||femp||fcod||fnombre||fproy||fconcepto||ftipo||ffDesde||ffHasta);
+
+  const fil = pagos.filter(p => {
+    const campos = [p.num_egreso,p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.cod_bancolombia].map(v=>String(v||''));
+    const m = !q || campos.some(v=>v.toLowerCase().includes(q));
+    const mcod = !fcod || String(p.cod_bancolombia||'').toLowerCase().includes(fcod);
+    const mnombre = !fnombre || [p.nombre_tercero,p.nombre_pago].map(v=>String(v||'').toLowerCase()).some(v=>v.includes(fnombre));
+    const mproy = !fproy || String(p.proyecto_id)==fproy;
+    const mconcepto = !fconcepto || normalizarConcepto(p.concepto||'')===fconcepto;
+    const mtipo = !ftipo || p.tipo===ftipo;
+    const mfDesde = !ffDesde || (p.fecha_pago && p.fecha_pago>=ffDesde);
+    const mfHasta = !ffHasta || (p.fecha_pago && p.fecha_pago<=ffHasta);
+    return m&&mcod&&mnombre&&mproy&&mconcepto&&mtipo&&mfDesde&&mfHasta&&(!fe||p.estado===fe)&&(!femp||String(p.empresa_id)==femp);
+  });
+
+  document.getElementById('empty').style.display = fil.length?'none':'block';
+  const total = fil.reduce((s,p)=>s+p.valor,0);
+  const filaTotal = document.getElementById('fila-total-valor');
+  if (hayFiltro && fil.length) {
+    filaTotal.style.display='flex';
+    document.getElementById('total-valor-monto').textContent = fmt(total);
+    document.getElementById('total-valor-cant').textContent = `${fil.length} registro${fil.length!==1?'s':''}`;
+  } else { filaTotal.style.display='none'; }
+
+  const puedeEliminar = currentPerfil?.rol === 'admin';
+  const puedeAprobar = ['profesional','gerencia','admin'].includes(currentPerfil?.rol);
+
+  document.getElementById('tbody').innerHTML = fil.map(p => `<tr>
+    <td><strong>${p.num_egreso||'—'}</strong></td>
+    <td>${fmtDate(p.fecha_creacion)}</td>
+    <td class="trunc" style="max-width:100px;" title="${p.empresaNombre}">${p.empresaNombre}</td>
+    <td class="trunc" style="max-width:100px;" title="${p.proyectoNombre}">${p.proyectoNombre}</td>
+    <td>${p.concepto||'—'}</td>
+    <td>${p.id_tercero||'—'}</td>
+    <td class="trunc" style="max-width:120px;" title="${p.nombre_tercero||''}">${p.nombre_tercero||'—'}</td>
+    <td class="trunc" style="max-width:110px;" title="${p.nombre_pago||''}">${p.nombre_pago||'—'}</td>
+    <td>${p.tipo||'—'}</td>
+    <td><strong>${fmt(p.valor)}</strong></td>
+    <td>${fmtDate(p.fecha_pago)}</td>
+    <td>${codHTML(p.cod_bancolombia)}</td>
+    <td>${badgeHTML(p.estado)}</td>
+    <td class="trunc" style="max-width:120px;" title="${p.comentario||''}">${p.comentario||'—'}</td>
+    <td><div class="actions-cell">
+      ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="Aprobaciones"><i class="ti ti-shield-check"></i></button>`:''}
+      <button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar"><i class="ti ti-pencil"></i></button>
+      ${puedeEliminar?`<button class="btn-sm del" onclick="eliminarPago(${p.id})" ${p.estado==='Pagada'?'disabled':''} title="Eliminar"><i class="ti ti-trash"></i></button>`:''}
+    </div></td>
+  </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════
+// CRUD PAGOS
+// ═══════════════════════════════════════════════════════════
+function autocompletarTercero(){
+  const idVal=document.getElementById('f-idtercero').value.replace(/\D/g,'');
+  const hint=document.getElementById('f-idtercero-hint');
+  if(!idVal){hint.style.display='none';return;}
+  const match=pagos.find(p=>String(p.id_tercero||'').replace(/\D/g,'')===idVal);
+  if(match){
+    document.getElementById('f-nombretercero').value=match.nombre_tercero||'';
+    document.getElementById('f-nombrepago').value=match.nombre_pago||'';
+    hint.textContent=`✓ Tercero encontrado: ${match.nombre_tercero}`;
+    hint.style.display='block';
+  } else { hint.style.display='none'; }
+}
+
+function openNuevo(){
+  ['idtercero','nombretercero','nombrepago','bancolombia','egreso'].forEach(id=>{
+    const el=document.getElementById('f-'+id); if(el) el.value='';
+  });
+  const fc=document.getElementById('f-comentario'); if(fc) fc.value='';
+  const fco=document.getElementById('f-concepto'); if(fco) fco.value='';
+  const ft=document.getElementById('f-tipo'); if(ft) ft.value='';
+  const fv=document.getElementById('f-valor'); if(fv) fv.value='';
+  document.getElementById('f-idtercero-hint').style.display='none';
+  openModal('modalNuevo');
+}
+
+async function guardarPago(){
+  const empresa_id = g('f-empresa');
+  const proyecto_id = g('f-proyecto');
+  const concepto = g('f-concepto');
+  const id_tercero = g('f-idtercero').replace(/\D/g,'');
+  const nombre_tercero = capitalizar(g('f-nombretercero'));
+  const nombre_pago = capitalizar(g('f-nombrepago'));
+  const tipo = g('f-tipo');
+  const valorRaw = g('f-valor').replace(/\D/g,'');
+  const valor = parseInt(valorRaw)||0;
+
+  if(![empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo].every(Boolean)||!valor){
+    alert('Completa todos los campos obligatorios (*).');return;
+  }
+
+  const duplicado = pagos.find(p=>String(p.id_tercero||'').replace(/\D/g,'')=== id_tercero && p.valor===valor);
+  if(duplicado){
+    _pagoPendienteGuardar={empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
+      num_egreso:g('f-egreso')||null,cod_bancolombia:g('f-bancolombia')||null,
+      comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',
+      creado_por:currentUser.id};
+    document.getElementById('dup-egreso').textContent=duplicado.num_egreso||'—';
+    document.getElementById('dup-fecha').textContent=fmtDate(duplicado.fecha_creacion);
+    document.getElementById('dup-pagador').textContent=duplicado.empresaNombre;
+    document.getElementById('dup-proyecto').textContent=duplicado.proyectoNombre;
+    document.getElementById('dup-valor').textContent=fmt(duplicado.valor);
+    openModal('modalDuplicado');return;
+  }
+  await insertarPago({empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
+    num_egreso:g('f-egreso')||null,cod_bancolombia:g('f-bancolombia')||null,
+    comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',creado_por:currentUser.id});
+}
+
+async function confirmarGuardarPago(){
+  if(!_pagoPendienteGuardar)return;
+  await insertarPago(_pagoPendienteGuardar);
+  _pagoPendienteGuardar=null;
+  closeModal('modalDuplicado');
+}
+
+async function insertarPago(obj){
+  show('loading');
+  const { error } = await sb.from('pagos').insert(obj);
+  if(error){hide('loading');alert('Error al guardar: '+error.message);return;}
+  await cargarPagos();
+  renderStats();renderTabla();actualizarSelectEmpresas();
+  hide('loading');closeModal('modalNuevo');
+}
+
+async function eliminarPago(id){
+  const p=pagos.find(x=>x.id===id);
+  if(!p)return;
+  if(p.estado==='Pagada'){alert('No se puede eliminar un pago ya Pagado.');return;}
+  if(!confirm('¿Eliminar este pago?'))return;
+  show('loading');
+  await sb.from('pagos').delete().eq('id',id);
+  await cargarPagos();renderStats();renderTabla();
+  hide('loading');
+}
+
+// ─── EDITAR ───────────────────────────────────────────────
+function abrirEditar(id){
+  const p=pagos.find(x=>x.id===id);if(!p)return;
+  editandoId=id;_guardandoEdicion=false;
+  const esPagada=p.estado==='Pagada';
+  document.getElementById('edit-titulo').textContent=`— ${p.num_egreso||'sin número'}`;
+  document.getElementById('edit-pagada-aviso').style.display=esPagada?'flex':'none';
+
+  // poblar selects
+  const selEmp=document.getElementById('e-empresa');
+  selEmp.innerHTML=empresas.map(e=>`<option value="${e.id}"${e.id===p.empresa_id?' selected':''}>${e.nombre}</option>`).join('');
+  selEmp.value=p.empresa_id;
+  const proys=proyectos.filter(pr=>pr.empresa_id===p.empresa_id);
+  document.getElementById('e-proyecto').innerHTML=proys.map(pr=>`<option value="${pr.id}"${pr.id===p.proyecto_id?' selected':''}>${pr.nombre}</option>`).join('');
+
+  // poblar campos
+  document.getElementById('e-concepto').value=p.concepto||'';
+  document.getElementById('e-idtercero').value=p.id_tercero?new Intl.NumberFormat('es-CO').format(parseInt(p.id_tercero)):'';
+  document.getElementById('e-nombretercero').value=p.nombre_tercero||'';
+  document.getElementById('e-nombrepago').value=p.nombre_pago||'';
+  document.getElementById('e-tipo').value=p.tipo||'';
+  document.getElementById('e-valor').value=p.valor?new Intl.NumberFormat('es-CO').format(p.valor):'';
+  document.getElementById('e-bancolombia').value=p.cod_bancolombia||'';
+  document.getElementById('e-egreso').value=p.num_egreso||'';
+  document.getElementById('e-fechapago').value=p.fecha_pago||'';
+  document.getElementById('e-comentario').value=p.comentario||'';
+
+  // bloquear campos si Pagada
+  const bloqueados=['e-empresa','e-proyecto','e-concepto','e-idtercero','e-nombretercero','e-nombrepago','e-tipo','e-valor','e-egreso','e-comentario'];
+  bloqueados.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.disabled=esPagada;el.style.opacity=esPagada?'.6':'1';}
+  });
+
+  openModal('modalEditar');
+}
+
+async function guardarEdicion(){
+  if(_guardandoEdicion)return;
+  if(!document.getElementById('modalEditar').classList.contains('open'))return;
+  const p=pagos.find(x=>x.id===editandoId);if(!p)return;
+  _guardandoEdicion=true;
+
+  const updates={
+    cod_bancolombia:g('e-bancolombia')||null,
+    fecha_pago:g('e-fechapago')||null,
+  };
+
+  if(p.estado!=='Pagada'){
+    const valorRaw=g('e-valor').replace(/\D/g,'');
+    const valor=parseInt(valorRaw)||0;
+    const empresa_id=g('e-empresa');
+    const proyecto_id=g('e-proyecto');
+    const concepto=g('e-concepto');
+    const id_tercero=g('e-idtercero').replace(/\D/g,'');
+    const nombre_tercero=capitalizar(g('e-nombretercero'));
+    const nombre_pago=capitalizar(g('e-nombrepago'));
+    const tipo=g('e-tipo');
+    if(![empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo].every(Boolean)||!valor){
+      _guardandoEdicion=false;alert('Completa todos los campos obligatorios.');return;
+    }
+    Object.assign(updates,{empresa_id:parseInt(empresa_id),proyecto_id:parseInt(proyecto_id),
+      concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
+      num_egreso:g('e-egreso')||null,comentario:capitalizarFrase(g('e-comentario'))||null});
+  }
+
+  show('loading');
+  await sb.from('pagos').update(updates).eq('id',editandoId);
+  await cargarPagos();renderStats();renderTabla();
+  hide('loading');closeModal('modalEditar');editandoId=null;_guardandoEdicion=false;
+}
+
+// ─── APROBACIONES ─────────────────────────────────────────
+async function abrirAprobacion(id){
+  const p=pagos.find(x=>x.id===id);if(!p)return;
+  aprobacionId=id;
+  document.getElementById('apro-titulo').textContent=`— ${p.num_egreso||'sin número'} · ${p.nombre_tercero||''}`;
+
+  // cargar aprobaciones desde BD
+  const { data: apros } = await sb.from('aprobaciones').select('*,perfil:perfil_id(nombre,rol)').eq('pago_id',id);
+  const aprobaciones = apros||[];
+
+  // usuarios aprobadores
+  const { data: aprobadores } = await sb.from('perfiles').select('*').in('rol',['profesional','gerencia']).eq('activo',true);
+
+  const puedoAprobar = ['profesional','gerencia','admin'].includes(currentPerfil?.rol);
+  const miAprobacion = aprobaciones.find(a=>a.perfil_id===currentUser.id);
+  const profAprobados = aprobaciones.filter(a=>a.estado==='aprobado'&&a.rol==='profesional').length;
+  const gerAprobado = aprobaciones.find(a=>a.estado==='aprobado'&&a.rol==='gerencia');
+
+  const rows=(aprobadores||[]).map(u=>{
+    const apro=aprobaciones.find(a=>a.perfil_id===u.id);
+    const esAprobado=apro?.estado==='aprobado';
+    const esMio=u.id===currentUser.id;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border2);">
+      <div>
+        <div style="font-weight:600;font-size:13px;">${u.nombre}</div>
+        <div style="font-size:11px;color:var(--text3);text-transform:capitalize;">${u.rol}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        ${apro?.fecha?`<span style="font-size:11px;color:var(--text3);">${fmtDate(apro.fecha)}</span>`:''}
+        ${esAprobado
+          ? `<span style="color:var(--green);font-size:20px;"><i class="ti ti-circle-check"></i></span>`
+          : (puedoAprobar && esMio && p.estado!=='Pagada'
+              ? `<button class="btn-sm approve" onclick="aprobar(${id},'${u.id}','${u.rol}')"><i class="ti ti-check"></i> Aprobar</button>`
+              : `<span style="color:var(--text3);font-size:18px;"><i class="ti ti-clock"></i></span>`)
+        }
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('apro-body').innerHTML=`
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text2);">
+      Profesionales aprobados: ${profAprobados} | Gerencia: ${gerAprobado?'✓ Aprobado':'Pendiente'}
+    </div>
+    ${rows}
+  `;
+  openModal('modalAprobacion');
+}
+
+async function aprobar(pagoId, perfilId, rol){
+  const p=pagos.find(x=>x.id===pagoId);if(!p)return;
+  show('loading');
+
+  // upsert aprobación
+  await sb.from('aprobaciones').upsert({
+    pago_id:pagoId, perfil_id:perfilId, rol, estado:'aprobado', fecha:new Date().toISOString()
+  },{onConflict:'pago_id,perfil_id'});
+
+  // si es gerencia → marcar como Pagada
+  if(rol==='gerencia'){
+    await sb.from('pagos').update({estado:'Pagada',fecha_pago:new Date().toISOString().split('T')[0]}).eq('id',pagoId);
+  }
+
+  await cargarPagos();renderStats();renderTabla();
+  hide('loading');
+  await abrirAprobacion(pagoId); // refrescar modal
+}
+
+// ═══════════════════════════════════════════════════════════
+// IMPORTAR EXCEL
+// ═══════════════════════════════════════════════════════════
+function handleFile(e){
+  const file=e.target.files[0];if(!file)return;
+  if(!/\.(xlsx|xls)$/i.test(file.name)){alert('Archivo debe ser .xlsx o .xls');return;}
+  const st=document.getElementById('import-status');
+  st.style.color='var(--text2)';st.textContent='Leyendo archivo...';
+  const reader=new FileReader();
+  reader.onload=async(ev)=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array',cellDates:false,raw:true});
+      const nombreHoja=wb.SheetNames.find(n=>n.toLowerCase().includes('egreso'))||wb.SheetNames[0];
+      const ws=wb.Sheets[nombreHoja];
+      const allRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+      if(allRows.length<2){st.textContent='La hoja está vacía.';return;}
+
+      const hdrs=allRows[0].map(h=>String(h||'').trim());
+      const ci=(names)=>{
+        for(const n of names){const i=hdrs.findIndex(h=>h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(n));if(i>=0)return i;}
+        return -1;
+      };
+      const iEgreso=ci(['egreso']);
+      const iPagador=ci(['pagador','empresa pagadora','empresa']);
+      const iProyecto=ci(['proyecto']);
+      const iConcepto=ci(['concepto']);
+      const iIdTer=ci(['identificaci']);
+      const iNomTer=ci(['nombre tercero']);
+      const iNomPag=ci(['nombre a quien','beneficiario']);
+      const iTipo=ci(['tipo de pago','tipo pago']);
+      const iValor=ci(['valor']);
+      const iFechaPago=ci(['fecha de pago','fecha pago']);
+      const iCod=ci(['cód banco','cod banco','código banco']);
+      const iEstado=ci(['estado']);
+      const iComent=ci(['comentario']);
+
+      const rows=allRows.slice(1);
+      let importados=0,omitidos=0;
+      const lotes=[];
+
+      for(const row of rows){
+        const celStr=(i)=>i>=0?String(row[i]||'').trim():'';
+        const celVal=(i)=>i>=0?row[i]:'';
+
+        const empresaNom=celStr(iPagador);
+        const proyectoNom=celStr(iProyecto).toUpperCase();
+        const id_tercero=celStr(iIdTer).replace(/\D/g,'');
+        const nombre_tercero=capitalizar(celStr(iNomTer));
+
+        // valor
+        const vc=celVal(iValor);
+        let valor=0;
+        if(typeof vc==='number'){valor=Math.abs(vc);}
+        else{
+          const s=String(vc||'').replace(/[$\s]/g,'').replace(/[^0-9.,]/g,'');
+          if(s){
+            if(s.includes(',')&&s.includes('.')){valor=s.lastIndexOf(',')< s.lastIndexOf('.')?parseFloat(s.replace(/,/g,''))||0:parseFloat(s.replace(/\./g,'').replace(',','.'))||0;}
+            else if(s.includes(',')&&!s.includes('.')){const p=s.split(',');valor=(p.length===2&&p[1].length<=2)?parseFloat(s.replace(',','.'))||0:parseFloat(s.replace(/,/g,''))||0;}
+            else if(s.includes('.')){const p=s.split('.');valor=(p.length>2||(p.length===2&&p[p.length-1].length===3))?parseFloat(s.replace(/\./g,''))||0:parseFloat(s)||0;}
+            else{valor=parseFloat(s)||0;}
+          }
+        }
+
+        if(!empresaNom&&!proyectoNom&&!id_tercero&&!nombre_tercero&&valor===0){omitidos++;continue;}
+
+        // resolver empresa
+        const emp=empresas.find(e=>e.nombre.toLowerCase()===empresaNom.toLowerCase());
+        if(!emp){omitidos++;continue;}
+
+        // resolver proyecto
+        let proy=proyectos.find(p=>p.empresa_id===emp.id&&p.nombre===proyectoNom);
+        if(!proy){
+          // crear proyecto
+          const {data:np}=await sb.from('proyectos').insert({empresa_id:emp.id,nombre:proyectoNom}).select().single();
+          if(np){proyectos.push(np);proy=np;}
+          else{omitidos++;continue;}
+        }
+
+        // estado
+        const estRaw=celStr(iEstado).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        const fpRaw=celVal(iFechaPago);
+        let estado='Pendiente';
+        if(estRaw.startsWith('=')){estado=fpRaw&&fpRaw!==''?'Pagada':'Pendiente';}
+        else if(['pagada','pagado','pago','paid','paga'].includes(estRaw)){estado='Pagada';}
+
+        // fecha pago
+        let fecha_pago=null;
+        if(fpRaw){
+          if(typeof fpRaw==='number'&&fpRaw>40000){
+            const d=new Date(Math.round((fpRaw-25569)*86400*1000));
+            fecha_pago=d.toISOString().split('T')[0];
+          } else {
+            const s=String(fpRaw).trim();
+            if(/^\d{4}-\d{2}-\d{2}/.test(s))fecha_pago=s.substring(0,10);
+            else if(/^\d{2}\/\d{2}\/\d{4}/.test(s)){const[d,m,y]=s.split('/');fecha_pago=`${y}-${m}-${d}`;}
+          }
+        }
+
+        lotes.push({
+          empresa_id:emp.id, proyecto_id:proy.id,
+          concepto:normalizarConcepto(celStr(iConcepto)),
+          num_egreso:celStr(iEgreso)||null,
+          id_tercero, nombre_tercero,
+          nombre_pago:capitalizar(celStr(iNomPag)),
+          tipo:celStr(iTipo)||null,
+          valor, fecha_pago,
+          cod_bancolombia:celStr(iCod)||null,
+          estado,
+          comentario:capitalizarFrase(celStr(iComent))||null,
+          creado_por:currentUser.id,
+        });
+        importados++;
+      }
+
+      // insertar en lotes de 500
+      for(let i=0;i<lotes.length;i+=500){
+        await sb.from('pagos').insert(lotes.slice(i,i+500));
+      }
+
+      await cargarPagos();renderStats();renderTabla();actualizarSelectEmpresas();
+      st.style.color='var(--accent2)';
+      st.textContent=`✓ ${importados} registros importados · ${omitidos} omitidos`;
+      setTimeout(()=>closeModal('modalImport'),5000);
+    }catch(err){
+      st.style.color='var(--danger)';st.textContent='Error: '+err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════════════════
+// EXPORTAR EXCEL
+// ═══════════════════════════════════════════════════════════
+function exportarExcel(){
+  const filas=pagos.map(p=>({
+    'No. egreso':p.num_egreso||'—',
+    'Fecha creación':p.fecha_creacion||'',
+    'Pagador':p.empresaNombre,
+    'Proyecto':p.proyectoNombre,
+    'Concepto':p.concepto||'',
+    'Identificación tercero':p.id_tercero||'',
+    'Nombre tercero':p.nombre_tercero||'',
+    'Nombre a quien se pagó':p.nombre_pago||'',
+    'Tipo de pago':p.tipo||'',
+    'Valor':p.valor||0,
+    'Fecha de pago':p.fecha_pago||'',
+    'Cód Banco':p.cod_bancolombia||'',
+    'Estado':p.estado,
+    'Comentario':p.comentario||'',
+  }));
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(filas);
+  XLSX.utils.book_append_sheet(wb,ws,'Egresos');
+  XLSX.writeFile(wb,`egresos_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODALES
+// ═══════════════════════════════════════════════════════════
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  if(id==='modalNuevo') openNuevo();
+  if(id==='tab-admin') cargarUsuarios();
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  if(id==='modalAprobacion')aprobacionId=null;
+  if(id==='modalImport'){document.getElementById('import-status').textContent='';document.getElementById('fileInput').value='';}
+  if(id==='modalDuplicado')_pagoPendienteGuardar=null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════════════
+function showTab(tab, el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(tab).classList.add('active');
+  if(tab==='tab-admin') cargarUsuarios();
+}
+</script>
+</body>
+</html>
