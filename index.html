@@ -1136,9 +1136,19 @@ function handleFile(e){
         importados++;
       }
 
-      // insertar en lotes de 500
-      for(let i=0;i<lotes.length;i+=500){
-        await sb.from('pagos').insert(lotes.slice(i,i+500));
+      // insertar en lotes de 200 (más seguro)
+      let insertados=0;
+      for(let i=0;i<lotes.length;i+=200){
+        const lote=lotes.slice(i,i+200);
+        st.textContent=`Guardando... ${Math.min(i+200,lotes.length)} de ${lotes.length}`;
+        const {error:insErr}=await sb.from('pagos').insert(lote);
+        if(insErr){
+          console.error('Error insertando lote',i,insErr);
+          st.style.color='var(--danger)';
+          st.textContent=`Error en lote ${i}: ${insErr.message}`;
+          return;
+        }
+        insertados+=lote.length;
       }
 
       await cargarPagos();renderStats();renderTabla();actualizarSelectEmpresas();
