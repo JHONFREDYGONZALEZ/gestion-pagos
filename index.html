@@ -1074,7 +1074,7 @@ function handleFile(e){
         // valor
         const vc=celVal(iValor);
         let valor=0;
-        if(typeof vc==='number'){valor=Math.abs(vc);}
+        if(typeof vc==='number'){valor=Math.round(Math.abs(vc));}
         else{
           const s=String(vc||'').replace(/[$\s]/g,'').replace(/[^0-9.,]/g,'');
           if(s){
