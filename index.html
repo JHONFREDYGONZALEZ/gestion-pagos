@@ -1579,7 +1579,7 @@ function renderCatalogo(){
               <label style="color:var(--text3);">Presup. total:</label>
               <input type="text" value="${p.presupuesto>0?new Intl.NumberFormat('es-CO').format(p.presupuesto):''}"
                 placeholder="0" inputmode="numeric"
-                oninput="this.value=this.value.replace(/[^0-9.]/g,'')"
+                oninput="this.value=new Intl.NumberFormat('es-CO').format(parseInt(this.value.replace(/\D/g,'')||0)||0);if(this.value==='0')this.value=''"
                 onchange="guardarPresupuestoTotal(${p.id},this.value)"
                 style="width:130px;font-size:12px;text-align:right;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
             </div>
@@ -1593,7 +1593,7 @@ function renderCatalogo(){
                   <span style="flex:1;color:var(--text2);">${co}</span>
                   <input type="text" value="${pc&&pc.presupuesto>0?new Intl.NumberFormat('es-CO').format(pc.presupuesto):''}"
                     placeholder="0" inputmode="numeric"
-                    oninput="this.value=this.value.replace(/[^0-9.]/g,'')"
+                    oninput="this.value=new Intl.NumberFormat('es-CO').format(parseInt(this.value.replace(/\D/g,'')||0)||0);if(this.value==='0')this.value=''"
                     onchange="guardarPresupuestoConcepto(${p.id},'${co}',this.value,${emp.id})"
                     style="width:110px;font-size:11px;text-align:right;padding:3px 7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
                 </div>`;
