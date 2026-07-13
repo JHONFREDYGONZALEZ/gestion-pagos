@@ -1416,35 +1416,45 @@ function renderGastos(){
   document.getElementById('gastos-body').innerHTML=html;
   if(!grupos.length) return;
 
-  const datasets=todosAnios.map(a=>({
-    label:a,
-    data:grupos.map(g=>{
-      const fil=base.filter(p=>{
-        if(!p.fechaPago||!p.fechaPago.startsWith(a)) return false;
-        if(!esConsolidado && p.fechaPago.substring(5,7)!==gpFiltros.mes) return false;
-        return esPorProy?p.proyecto===g:p.empresa===g;
-      });
-      return fil.reduce((s,p)=>s+p.valor,0);
-    }),
-    backgroundColor:colAnio[a],borderRadius:4,borderSkipped:false,
-  }));
+  const empresaActiva2=esPorProy?[...gpFiltros.empresas][0]:null;
+  const totalesGasto=grupos.map(g=>base.filter(p=>esPorProy?p.proyecto===g:p.empresa===g).reduce((s,p)=>s+p.valor,0));
+  const presupuestosGrupo=esPorProy
+    ? grupos.map(g=>getPresupuesto(g,empresaActiva2)||null)
+    : grupos.map(()=>null);
+  const hayPres=presupuestosGrupo.some(v=>v!==null);
 
-  setTimeout(()=>{
-    const el=document.getElementById('gp-ch-principal');if(!el)return;
-    const empresaActiva=esPorProy?[...gpFiltros.empresas][0]:null;
-    const totalesGasto=grupos.map(g=>base.filter(p=>esPorProy?p.proyecto===g:p.empresa===g).reduce((s,p)=>s+p.valor,0));
-    const presupuestosGrupo=esPorProy
-      ? grupos.map(g=>getPresupuesto(g,empresaActiva)||null)
-      : grupos.map(()=>null);
-    const hayPres=presupuestosGrupo.some(v=>v!==null);
-
-    const presDataset=hayPres?{label:'Presupuesto',data:presupuestosGrupo,backgroundColor:'rgba(229,62,62,0.15)',borderColor:'#E53E3E',borderWidth:2,type:'bar',barPercentage:0.35,categoryPercentage:1.0,borderSkipped:false,borderRadius:3,order:2}:null;
-    const allDS=[...datasets.map(d=>({...d,order:1,barPercentage:0.6})),...(presDataset?[presDataset]:[])];
-    const labelsPct=grupos.map((g,i)=>{
+  // Si hay presupuesto: mostrar 1 barra de gasto total + 1 barra de presupuesto (sin apilar por años)
+  // Si no hay presupuesto: apilar por años con colores
+  let allDS, labelsPct;
+  if(hayPres){
+    allDS=[
+      {label:'Gastado',data:totalesGasto,backgroundColor:'#534AB7',borderRadius:4,borderSkipped:false,order:1,barPercentage:0.6},
+      {label:'Presupuesto',data:presupuestosGrupo,backgroundColor:'rgba(229,62,62,0.15)',borderColor:'#E53E3E',borderWidth:2,borderRadius:4,borderSkipped:false,order:2,barPercentage:0.4}
+    ];
+    labelsPct=grupos.map((g,i)=>{
       const pres=presupuestosGrupo[i];
       if(!pres) return g;
       return `${g}  (${Math.round(totalesGasto[i]/pres*100)}%)`;
     });
+  } else {
+    const datasets=todosAnios.map(a=>({
+      label:a,
+      data:grupos.map(g=>{
+        const fil=base.filter(p=>{
+          if(!p.fechaPago||!p.fechaPago.startsWith(a)) return false;
+          if(!esConsolidado && p.fechaPago.substring(5,7)!==gpFiltros.mes) return false;
+          return esPorProy?p.proyecto===g:p.empresa===g;
+        });
+        return fil.reduce((s,p)=>s+p.valor,0);
+      }),
+      backgroundColor:colAnio[a],borderRadius:4,borderSkipped:false,
+    }));
+    allDS=datasets;
+    labelsPct=grupos;
+  }
+
+  setTimeout(()=>{
+    const el=document.getElementById('gp-ch-principal');if(!el)return;
 
     const c=new Chart(el,{
       type:'bar',data:{labels:labelsPct,datasets:allDS},
@@ -1455,8 +1465,8 @@ function renderGastos(){
           return `${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`;
         }}}},
         scales:{
-          x:{stacked:true,ticks:{color:'#888',font:{size:11},callback:v=>{if(v>=1e9)return'$'+Math.round(v/1e9*10)/10+'B';if(v>=1e6)return'$'+Math.round(v/1e6*10)/10+'M';if(v>=1e3)return'$'+Math.round(v/1e3)+'K';return'$'+v;}},grid:{color:'rgba(128,128,128,0.1)'}},
-          y:{stacked:true,grid:{display:false},ticks:{color:'#888',font:{size:12}}}
+          x:{stacked:!hayPres,ticks:{color:'#888',font:{size:11},callback:v=>{if(v>=1e9)return'$'+Math.round(v/1e9*10)/10+'B';if(v>=1e6)return'$'+Math.round(v/1e6*10)/10+'M';if(v>=1e3)return'$'+Math.round(v/1e3)+'K';return'$'+v;}},grid:{color:'rgba(128,128,128,0.1)'}},
+          y:{stacked:!hayPres,grid:{display:false},ticks:{color:'#888',font:{size:12}}}
         }
       }
     });
