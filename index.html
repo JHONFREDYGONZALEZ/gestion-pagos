@@ -1475,6 +1475,7 @@ function renderGastos(){
     if(esPorProy){
       const wrap=document.getElementById('gp-conceptos-wrap');
       if(!wrap) return;
+      const empresaActiva=empresaActiva2;
       const CONCEPT_COLORS=['#534AB7','#1D9E75','#D85A30','#185FA5','#BA7517','#993556','#0C447C'];
       grupos.forEach((proy,gi)=>{
         const pagosProy=base.filter(p=>p.proyecto===proy);
