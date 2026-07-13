@@ -907,9 +907,11 @@ async function eliminarPago(id){
   const p=pagos.find(x=>x.id===id);
   if(!p)return;
   if(p.estado==='Pagada'){alert('No se puede eliminar un pago ya Pagado.');return;}
-  if(!confirm('¿Eliminar este pago?'))return;
+  const ok=window.confirm('¿Confirma que desea eliminar este pago? Esta acción no se puede deshacer.');
+  if(!ok)return;
   show('loading');
-  await sb.from('pagos').delete().eq('id',id);
+  const {error}=await sb.from('pagos').delete().eq('id',id);
+  if(error){hide('loading');alert('Error al eliminar: '+error.message);return;}
   await cargarPagos();renderStats();renderTabla();
   hide('loading');
 }
@@ -996,11 +998,11 @@ async function abrirAprobacion(id){
   const { data: apros } = await sb.from('aprobaciones').select('*,perfil:perfil_id(nombre,rol)').eq('pago_id',id);
   const aprobaciones = apros||[];
 
-  // usuarios aprobadores
-  const { data: aprobadores } = await sb.from('perfiles').select('*').in('rol',['profesional','gerencia']).eq('activo',true);
+  // usuarios aprobadores — incluir pagador ya que ahora puede aprobar
+  const { data: aprobadores } = await sb.from('perfiles').select('*').in('rol',['pagador','profesional','gerencia']).eq('activo',true);
 
-  const puedoAprobar = ['profesional','gerencia','admin'].includes(currentPerfil?.rol);
-  const miAprobacion = aprobaciones.find(a=>a.perfil_id===currentUser.id);
+  const puedoAprobar = ['pagador','profesional','gerencia','admin'].includes(currentPerfil?.rol);
+  const esAdmin = currentPerfil?.rol === 'admin';
   const profAprobados = aprobaciones.filter(a=>a.estado==='aprobado'&&a.rol==='profesional').length;
   const gerAprobado = aprobaciones.find(a=>a.estado==='aprobado'&&a.rol==='gerencia');
 
@@ -1008,6 +1010,8 @@ async function abrirAprobacion(id){
     const apro=aprobaciones.find(a=>a.perfil_id===u.id);
     const esAprobado=apro?.estado==='aprobado';
     const esMio=u.id===currentUser.id;
+    // Admin puede aprobar en nombre de cualquiera; otros solo en su propio nombre
+    const puedeAprobarEste = puedoAprobar && (esMio || esAdmin) && !esAprobado && p.estado!=='Pagada';
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border2);">
       <div>
         <div style="font-weight:600;font-size:13px;">${u.nombre}</div>
@@ -1017,7 +1021,7 @@ async function abrirAprobacion(id){
         ${apro?.fecha?`<span style="font-size:11px;color:var(--text3);">${fmtDate(apro.fecha)}</span>`:''}
         ${esAprobado
           ? `<span style="color:var(--green);font-size:20px;"><i class="ti ti-circle-check"></i></span>`
-          : (puedoAprobar && esMio && p.estado!=='Pagada'
+          : (puedeAprobarEste
               ? `<button class="btn-sm approve" onclick="aprobar(${id},'${u.id}','${u.rol}')"><i class="ti ti-check"></i> Aprobar</button>`
               : `<span style="color:var(--text3);font-size:18px;"><i class="ti ti-clock"></i></span>`)
         }
