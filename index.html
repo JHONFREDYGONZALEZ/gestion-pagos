@@ -637,15 +637,24 @@ async function cargarEmpresas() {
 }
 
 async function cargarPagos() {
-  const { data } = await sb
-    .from('pagos')
-    .select(`*, empresa:empresa_id(nombre), proyecto:proyecto_id(nombre)`)
-    .order('created_at', { ascending: false });
-  pagos = (data || []).map(p => ({
-    ...p,
-    empresaNombre: p.empresa?.nombre || '',
-    proyectoNombre: p.proyecto?.nombre || '',
-  }));
+  pagos = [];
+  let from = 0;
+  const pageSize = 1000;
+  while(true) {
+    const { data, error } = await sb
+      .from('pagos')
+      .select(`*, empresa:empresa_id(nombre), proyecto:proyecto_id(nombre)`)
+      .order('created_at', { ascending: false })
+      .range(from, from + pageSize - 1);
+    if(error || !data || data.length === 0) break;
+    pagos = pagos.concat(data.map(p => ({
+      ...p,
+      empresaNombre: p.empresa?.nombre || '',
+      proyectoNombre: p.proyecto?.nombre || '',
+    })));
+    if(data.length < pageSize) break;
+    from += pageSize;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
