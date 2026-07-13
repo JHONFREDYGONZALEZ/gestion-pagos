@@ -799,8 +799,9 @@ function renderTabla() {
     document.getElementById('total-valor-cant').textContent = `${fil.length} registro${fil.length!==1?'s':''}`;
   } else { filaTotal.style.display='none'; }
 
-  const puedeEliminar = currentPerfil?.rol === 'admin';
-  const puedeAprobar = ['profesional','gerencia','admin'].includes(currentPerfil?.rol);
+  const puedeAprobar = ['pagador','profesional','gerencia','admin'].includes(currentPerfil?.rol);
+  const puedeEditar  = ['pagador','admin'].includes(currentPerfil?.rol);
+  const puedeEliminar= ['pagador','gerencia','admin'].includes(currentPerfil?.rol);
 
   document.getElementById('tbody').innerHTML = fil.map(p => `<tr>
     <td><strong>${p.num_egreso||'—'}</strong></td>
@@ -819,7 +820,7 @@ function renderTabla() {
     <td class="trunc" style="max-width:120px;" title="${p.comentario||''}">${p.comentario||'—'}</td>
     <td><div class="actions-cell">
       ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="${p.estado==='Pagada'?'Aprobado':'Pendiente aprobación'}" style="border-color:${p.estado==='Pagada'?'#27500A':'#D97706'};color:${p.estado==='Pagada'?'#27500A':'#D97706'};background:${p.estado==='Pagada'?'#EAF3DE':'#FEF3C7'};font-size:14px;padding:3px 7px;">${p.estado==='Pagada'?'✓':'⏱'}</button>`:''}
-      <button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar" style="border-color:#3B82F6;color:#3B82F6;background:#EFF6FF;font-size:13px;padding:3px 7px;">✏️</button>
+      ${puedeEditar?`<button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar" style="border-color:#3B82F6;color:#3B82F6;background:#EFF6FF;font-size:13px;padding:3px 7px;">✏️</button>`:''}
       ${puedeEliminar?`<button class="btn-sm" onclick="eliminarPago(${p.id})" ${p.estado==='Pagada'?'disabled':''} title="Eliminar" style="${p.estado==='Pagada'?'opacity:.35;cursor:not-allowed;':'border-color:#E53E3E;color:#E53E3E;background:#FEF2F2;'}font-size:13px;padding:3px 7px;">🗑</button>`:''}
     </div></td>
   </tr>`).join('');
