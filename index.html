@@ -805,9 +805,9 @@ function renderTabla() {
     <td>${badgeHTML(p.estado)}</td>
     <td class="trunc" style="max-width:120px;" title="${p.comentario||''}">${p.comentario||'—'}</td>
     <td><div class="actions-cell">
-      ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="Aprobaciones"><i class="ti ti-shield-check"></i></button>`:''}
-      <button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar"><i class="ti ti-pencil"></i></button>
-      ${puedeEliminar?`<button class="btn-sm del" onclick="eliminarPago(${p.id})" ${p.estado==='Pagada'?'disabled':''} title="Eliminar"><i class="ti ti-trash"></i></button>`:''}
+      ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="${p.estado==='Pagada'?'Aprobado':'Pendiente aprobación'}" style="border-color:${p.estado==='Pagada'?'#27500A':'#D97706'};color:${p.estado==='Pagada'?'#27500A':'#D97706'};background:${p.estado==='Pagada'?'#EAF3DE':'#FEF3C7'};"><i class="ti ti-${p.estado==='Pagada'?'circle-check':'clock'}"></i></button>`:''}
+      <button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar" style="border-color:#3B82F6;color:#3B82F6;background:#EFF6FF;"><i class="ti ti-pencil"></i></button>
+      ${puedeEliminar?`<button class="btn-sm" onclick="eliminarPago(${p.id})" ${p.estado==='Pagada'?'disabled':''} title="Eliminar" style="${p.estado==='Pagada'?'opacity:.35;cursor:not-allowed;border-color:#ccc;color:#ccc;':'border-color:#E53E3E;color:#E53E3E;background:#FEF2F2;'}"><i class="ti ti-trash"></i></button>`:''}
     </div></td>
   </tr>`).join('');
 }
