@@ -179,6 +179,7 @@
       <button class="tab" id="tab-btn-admin" style="display:none;" onclick="showTab('tab-admin',this)"><i class="ti ti-users"></i> <span>Usuarios</span></button>
     </div>
     <div class="topbar-right" style="display:flex;align-items:center;gap:12px;margin-left:auto;">
+      <button class="btn" onclick="abrirCatalogo()"><i class="ti ti-building"></i> Empresas</button>
       <button class="btn" onclick="openModal('modalImport')" id="btn-importar" style="display:none;"><i class="ti ti-upload"></i> Importar</button>
       <button class="btn" onclick="exportarExcel()"><i class="ti ti-download"></i> Exportar</button>
       <button class="btn primary" onclick="openModal('modalNuevo')" id="btn-nuevo" style="display:none;"><i class="ti ti-plus"></i> Nuevo pago</button>
@@ -388,6 +389,18 @@
 </div>
 
 <!-- IMPORTAR -->
+<!-- MODAL CATÁLOGO -->
+<div class="modal-bg" id="modalCatalogo">
+  <div class="modal" style="max-width:720px;max-height:85vh;overflow-y:auto;">
+    <div class="modal-title"><i class="ti ti-building"></i> Empresas y presupuestos</div>
+    <div id="catalogo-body"></div>
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalCatalogo')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalImport">
   <div class="modal" style="max-width:480px;">
     <div class="modal-title"><i class="ti ti-upload"></i> Importar Excel</div>
@@ -1211,6 +1224,7 @@ function exportarExcel(){
 function openModal(id){
   document.getElementById(id).classList.add('open');
   if(id==='modalNuevo') openNuevo();
+  if(id==='modalCatalogo') renderCatalogo();
   if(id==='tab-admin') cargarUsuarios();
 }
 function closeModal(id){
@@ -1229,6 +1243,409 @@ function showTab(tab, el){
   el.classList.add('active');
   document.getElementById(tab).classList.add('active');
   if(tab==='tab-admin') cargarUsuarios();
+  if(tab==='tab-gastos') renderGastos();
+}
+
+// ═══════════════════════════════════════════════════════════
+// GASTOS POR PAGADOR
+// ═══════════════════════════════════════════════════════════
+const GP_PALETA=['#534AB7','#1D9E75','#D85A30','#185FA5','#BA7517','#993556','#791F1F','#0C447C'];
+const GP_EMPRESAS=['ASES','PNR','JSM','AMBIENTALES'];
+let _gpCharts=[];
+
+const gpFiltros={
+  empresas: new Set(GP_EMPRESAS),
+  proyectos: new Set(),
+  tipos: new Set(),
+  anios: new Set(),
+  estado: 'Todos',
+  mes: 'Consolidado',
+  _listo: false,
+};
+
+const GP_MESES=[
+  {v:'01',l:'Ene'},{v:'02',l:'Feb'},{v:'03',l:'Mar'},{v:'04',l:'Abr'},
+  {v:'05',l:'May'},{v:'06',l:'Jun'},{v:'07',l:'Jul'},{v:'08',l:'Ago'},
+  {v:'09',l:'Sep'},{v:'10',l:'Oct'},{v:'11',l:'Nov'},{v:'12',l:'Dic'},
+];
+
+function gpChip(label,activo,color,bg,onclick){
+  return `<button onclick="${onclick}" style="padding:5px 13px;border-radius:20px;font-size:12px;cursor:pointer;font-weight:${activo?500:400};border:1px solid ${activo?color:'var(--border2)'};background:${activo?bg:'var(--surface)'};color:${activo?color:'var(--text2)'};">${label}</button>`;
+}
+
+// Obtener presupuesto de un proyecto desde Supabase
+function getPresupuesto(proyNombre, empNombre){
+  const emp = empresas.find(e=>e.nombre===empNombre);
+  if(!emp) return 0;
+  const proy = proyectos.find(p=>p.empresa_id===emp.id && p.nombre===proyNombre);
+  return proy?.presupuesto||0;
+}
+function getPresupuestoConcepto(proyNombre, empNombre, concepto){
+  const emp = empresas.find(e=>e.nombre===empNombre);
+  if(!emp) return 0;
+  const proy = proyectos.find(p=>p.empresa_id===emp.id && p.nombre===proyNombre);
+  if(!proy) return 0;
+  const pc = presupuestos.find(pc=>pc.proyecto_id===proy.id && pc.concepto===concepto);
+  return pc?.presupuesto||0;
+}
+
+function renderGastos(){
+  _gpCharts.forEach(c=>{try{c.destroy();}catch(e){}});
+  _gpCharts=[];
+
+  // Adaptar campos cloud → nombres usados en lógica
+  const pagosAdapt = pagos.map(p=>({
+    ...p,
+    empresa: p.empresaNombre,
+    proyecto: p.proyectoNombre,
+    fechaPago: p.fecha_pago,
+  }));
+
+  const todosAnios=[...new Set(pagosAdapt.filter(p=>p.fechaPago).map(p=>p.fechaPago.substring(0,4)))].sort();
+  const todosTipos=[...new Set(pagosAdapt.map(p=>p.tipo).filter(Boolean))].sort();
+  const todosProy=[...new Set(pagosAdapt.map(p=>p.proyecto).filter(Boolean))].sort();
+
+  if(!gpFiltros._listo){
+    todosAnios.forEach(a=>gpFiltros.anios.add(a));
+    todosTipos.forEach(t=>gpFiltros.tipos.add(t));
+    todosProy.forEach(p=>gpFiltros.proyectos.add(p));
+    gpFiltros._listo=true;
+  }
+
+  const colAnio={};
+  todosAnios.forEach((a,i)=>{colAnio[a]=GP_PALETA[i%GP_PALETA.length];});
+  const esConsolidado=gpFiltros.mes==='Consolidado';
+
+  const base=pagosAdapt.filter(p=>{
+    const eEmp=gpFiltros.empresas.has(p.empresa);
+    const eProy=gpFiltros.proyectos.has(p.proyecto);
+    const eTipo=gpFiltros.tipos.has(p.tipo);
+    const eAnio=!p.fechaPago||gpFiltros.anios.has(p.fechaPago.substring(0,4));
+    const eEst=gpFiltros.estado==='Todos'||p.estado===gpFiltros.estado;
+    const eMes=esConsolidado||!p.fechaPago||p.fechaPago.substring(5,7)===gpFiltros.mes;
+    return eEmp&&eProy&&eTipo&&eAnio&&eEst&&eMes;
+  });
+
+  const esPorProy=gpFiltros.empresas.size===1;
+  const grupos=esPorProy
+    ?[...new Set(base.map(p=>p.proyecto))].sort()
+    :[...gpFiltros.empresas].sort();
+
+  const totalFiltrado=base.reduce((s,p)=>s+p.valor,0);
+  const empMayor=GP_EMPRESAS.map(e=>({e,v:base.filter(p=>p.empresa===e).reduce((s,p)=>s+p.valor,0)})).sort((a,b)=>b.v-a.v)[0];
+
+  const proyDisp=[...new Set(pagosAdapt.filter(p=>gpFiltros.empresas.has(p.empresa)).map(p=>p.proyecto))].sort();
+  const proyActivos=proyDisp.filter(p=>gpFiltros.proyectos.has(p));
+  const todosProyAct=proyDisp.length>0&&proyActivos.length===proyDisp.length;
+
+  const chipsEmp=GP_EMPRESAS.map(e=>gpChip(e,gpFiltros.empresas.has(e),'#534AB7','#EEEDFE',`gpT('empresas','${e}')`)).join('');
+  const chipsProy=proyDisp.map(p=>gpChip(p,gpFiltros.proyectos.has(p),'#1D9E75','#EAF3DE',`gpT('proyectos','${p.replace(/'/g,"\\'")}')`)).join('');
+  const btnTodosProy=gpChip(todosProyAct?'✓ Todos':'Todos',todosProyAct,'#1D9E75','#EAF3DE',`gpTodosProy(${todosProyAct})`);
+  const ESTADOS=['Todos','Pagada','Pendiente'];
+  const colEst={Todos:'#52525B',Pagada:'#27500A',Pendiente:'#633806'};
+  const bgEst={Todos:'var(--bg2)',Pagada:'#EAF3DE',Pendiente:'#FAEEDA'};
+  const chipsEst=ESTADOS.map(v=>gpChip(v,gpFiltros.estado===v,colEst[v],bgEst[v],`gpEst('${v}')`)).join('');
+  const chipsAnio=todosAnios.map(a=>gpChip(a,gpFiltros.anios.has(a),colAnio[a]||'#534AB7','#EEEDFE',`gpT('anios','${a}')`)).join('');
+  const chipsTipo=todosTipos.map(t=>gpChip(t,gpFiltros.tipos.has(t),'#D85A30','#FAECE7',`gpT('tipos','${t.replace(/'/g,"\\'")}') `)).join('');
+  const chipConsolidado=gpChip('Consolidado',esConsolidado,'#185FA5','#E6F1FB',`gpMes('Consolidado')`);
+  const chipsMes=GP_MESES.map(m=>gpChip(m.l,gpFiltros.mes===m.v,'#185FA5','#E6F1FB',`gpMes('${m.v}')`)).join('');
+  const aniosFilt=todosAnios.filter(a=>base.some(p=>p.fechaPago&&p.fechaPago.startsWith(a)));
+  const legendHTML=aniosFilt.map(a=>`<span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);"><span style="width:10px;height:10px;border-radius:2px;background:${colAnio[a]};flex-shrink:0;"></span>${a}</span>`).join('');
+  const chH=Math.max(220,grupos.length*48+80);
+  const nombreMes=esConsolidado?'':(GP_MESES.find(m=>m.v===gpFiltros.mes)?.l||'');
+
+  const html=`
+  <div class="card" style="margin-bottom:1.25rem;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:14px;">🎛 Filtros y vista</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div>
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Empresas</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">${chipsEmp}</div>
+      </div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;">Proyectos</div>
+          ${btnTodosProy}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">${chipsProy||'<span style="font-size:12px;color:var(--text3);font-style:italic;">Selecciona un pagador</span>'}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Estado</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">${chipsEst}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Años</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">${chipsAnio||'<span style="font-size:12px;color:var(--text3);font-style:italic;">Sin años</span>'}</div>
+      </div>
+      <div style="grid-column:1/-1;">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Periodo</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">${chipConsolidado}${chipsMes}</div>
+      </div>
+      <div style="grid-column:1/-1;">
+        <div style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Tipo de pago</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px;">${chipsTipo||'<span style="font-size:12px;color:var(--text3);font-style:italic;">Sin datos</span>'}</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.25rem;">
+    <div style="background:var(--bg2);border-radius:var(--radius);padding:12px 14px;"><div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">Total filtrado</div><div style="font-size:14px;font-weight:500;">${fmt(totalFiltrado)}</div></div>
+    <div style="background:var(--bg2);border-radius:var(--radius);padding:12px 14px;"><div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">Registros</div><div style="font-size:24px;font-weight:500;">${base.length}</div></div>
+    <div style="background:var(--bg2);border-radius:var(--radius);padding:12px 14px;"><div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">Mayor gasto</div><div style="font-size:16px;font-weight:500;">${empMayor?.e||'—'}</div></div>
+    <div style="background:var(--bg2);border-radius:var(--radius);padding:12px 14px;"><div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">Periodo</div><div style="font-size:16px;font-weight:500;">${esConsolidado?'Año completo':nombreMes}</div></div>
+  </div>
+
+  ${legendHTML?`<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:1rem;">${legendHTML}</div>`:''}
+
+  <div class="card">
+    <div style="font-size:14px;font-weight:500;margin-bottom:1rem;">
+      Gasto por <strong>${esPorProy?'proyecto — '+[...gpFiltros.empresas][0]:'empresa'}</strong>
+      ${esConsolidado?'':` — <strong>${nombreMes}</strong>`}
+    </div>
+    ${grupos.length===0
+      ?'<div style="font-size:13px;color:var(--text3);padding:2rem;text-align:center;">Sin registros con los filtros actuales</div>'
+      :`<div style="position:relative;width:100%;height:${chH}px;"><canvas id="gp-ch-principal"></canvas></div>`}
+  </div>
+
+  ${esPorProy && grupos.length ? `
+  <div style="margin-top:1.25rem;">
+    <div style="font-size:14px;font-weight:500;margin-bottom:0.75rem;">Desglose por concepto dentro de cada proyecto</div>
+    <div id="gp-conceptos-wrap" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;"></div>
+  </div>` : ''}`;
+
+  document.getElementById('gastos-body').innerHTML=html;
+  if(!grupos.length) return;
+
+  const datasets=todosAnios.map(a=>({
+    label:a,
+    data:grupos.map(g=>{
+      const fil=base.filter(p=>{
+        if(!p.fechaPago||!p.fechaPago.startsWith(a)) return false;
+        if(!esConsolidado && p.fechaPago.substring(5,7)!==gpFiltros.mes) return false;
+        return esPorProy?p.proyecto===g:p.empresa===g;
+      });
+      return fil.reduce((s,p)=>s+p.valor,0);
+    }),
+    backgroundColor:colAnio[a],borderRadius:4,borderSkipped:false,
+  }));
+
+  setTimeout(()=>{
+    const el=document.getElementById('gp-ch-principal');if(!el)return;
+    const empresaActiva=esPorProy?[...gpFiltros.empresas][0]:null;
+    const totalesGasto=grupos.map(g=>base.filter(p=>esPorProy?p.proyecto===g:p.empresa===g).reduce((s,p)=>s+p.valor,0));
+    const presupuestosGrupo=esPorProy
+      ? grupos.map(g=>getPresupuesto(g,empresaActiva)||null)
+      : grupos.map(()=>null);
+    const hayPres=presupuestosGrupo.some(v=>v!==null);
+
+    const presDataset=hayPres?{label:'Presupuesto',data:presupuestosGrupo,backgroundColor:'rgba(229,62,62,0.15)',borderColor:'#E53E3E',borderWidth:2,type:'bar',xAxisID:'xP',barPercentage:0.5,categoryPercentage:1.0,borderSkipped:false,borderRadius:3,order:2}:null;
+    const allDS=[...datasets.map(d=>({...d,order:1})),...(presDataset?[presDataset]:[])];
+    const labelsPct=grupos.map((g,i)=>{
+      const pres=presupuestosGrupo[i];
+      if(!pres) return g;
+      return `${g}  (${Math.round(totalesGasto[i]/pres*100)}%)`;
+    });
+
+    const c=new Chart(el,{
+      type:'bar',data:{labels:labelsPct,datasets:allDS},
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{
+          if(ctx.dataset.label==='Presupuesto') return `Presupuesto: ${fmt(ctx.parsed.x)}`;
+          return `${ctx.dataset.label}: ${fmt(ctx.parsed.x)}`;
+        }}}},
+        scales:{
+          x:{stacked:true,ticks:{color:'#888',font:{size:11},callback:v=>{if(v>=1e9)return'$'+Math.round(v/1e9*10)/10+'B';if(v>=1e6)return'$'+Math.round(v/1e6*10)/10+'M';if(v>=1e3)return'$'+Math.round(v/1e3)+'K';return'$'+v;}},grid:{color:'rgba(128,128,128,0.1)'}},
+          xP:{stacked:false,display:hayPres,position:'top',ticks:{display:false},grid:{display:false}},
+          y:{stacked:true,grid:{display:false},ticks:{color:'#888',font:{size:12}}}
+        }
+      }
+    });
+    _gpCharts.push(c);
+
+    if(esPorProy){
+      const wrap=document.getElementById('gp-conceptos-wrap');
+      if(!wrap) return;
+      const CONCEPT_COLORS=['#534AB7','#1D9E75','#D85A30','#185FA5','#BA7517','#993556','#0C447C'];
+      grupos.forEach((proy,gi)=>{
+        const pagosProy=base.filter(p=>p.proyecto===proy);
+        const totalProy=pagosProy.reduce((s,p)=>s+p.valor,0);
+        const presupuesto=getPresupuesto(proy,empresaActiva);
+        const pct=presupuesto>0?Math.round(totalProy/presupuesto*100):null;
+        const sobreEjecutado=pct!==null&&pct>100;
+        const conceptosPagos=new Set(pagosProy.map(p=>normalizarConcepto(p.concepto||'')).filter(Boolean));
+        const conceptos=[...conceptosPagos].sort();
+        const presConceptos=conceptos.map(co=>getPresupuestoConcepto(proy,empresaActiva,co));
+        const hayPresCon=presConceptos.some(v=>v>0);
+        const labelsC=conceptos.map((co,ci)=>{
+          const pres=presConceptos[ci];if(!pres)return co;
+          const g=pagosProy.filter(p=>normalizarConcepto(p.concepto||'')===co).reduce((s,p)=>s+p.valor,0);
+          return `${co}  (${Math.round(g/pres*100)}%)`;
+        });
+        const barH=Math.max(130,conceptos.length*40+60);
+        const barraEj=presupuesto>0?`
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2);margin-bottom:4px;">
+              <span>Ejecución presupuestal</span>
+              <span style="font-weight:600;color:${sobreEjecutado?'#E53E3E':pct>=80?'#BA7517':'#1D9E75'};">${pct}%</span>
+            </div>
+            <div style="background:var(--bg2);border-radius:4px;height:8px;overflow:hidden;">
+              <div style="width:${Math.min(pct,100)}%;height:100%;background:${sobreEjecutado?'#E53E3E':pct>=80?'#F6AD55':'#48BB78'};border-radius:4px;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-top:4px;">
+              <span>Gastado: <strong>${fmt(totalProy)}</strong></span>
+              <span>Presupuesto: <strong>${fmt(presupuesto)}</strong></span>
+            </div>
+            ${sobreEjecutado?`<div style="font-size:11px;color:#E53E3E;margin-top:3px;">⚠ Sobreejecutado en ${fmt(totalProy-presupuesto)}</div>`:''}
+          </div>`:'<div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-style:italic;">Sin presupuesto definido — configúralo en Empresas</div>';
+
+        const card=document.createElement('div');
+        card.style.cssText=`background:var(--surface);border:1px solid ${sobreEjecutado?'#E53E3E':'var(--border)'};border-radius:var(--radius-lg);padding:1rem 1.1rem;box-shadow:var(--shadow);`;
+        card.innerHTML=`
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <span style="font-size:13px;font-weight:600;">${proy}</span>
+            ${presupuesto>0?`<span style="font-size:12px;font-weight:600;color:${sobreEjecutado?'#E53E3E':'var(--text2)'};">${pct}% ejecutado</span>`:''}
+          </div>
+          ${barraEj}
+          ${conceptos.length?`<div style="position:relative;width:100%;height:${barH}px;"><canvas id="gp-cc-${gi}"></canvas></div>`:'<div style="font-size:12px;color:var(--text3);font-style:italic;">Sin conceptos</div>'}`;
+        wrap.appendChild(card);
+
+        if(conceptos.length){
+          setTimeout(()=>{
+            const elc=document.getElementById(`gp-cc-${gi}`);if(!elc)return;
+            const gastosC=conceptos.map(co=>pagosProy.filter(p=>normalizarConcepto(p.concepto||'')===co).reduce((s,p)=>s+p.valor,0));
+            const dsC=[{label:'Gastado',data:gastosC,backgroundColor:conceptos.map((_,ci)=>CONCEPT_COLORS[ci%CONCEPT_COLORS.length]),borderRadius:3,borderSkipped:false,xAxisID:'x'}];
+            if(hayPresCon) dsC.push({label:'Presupuesto',data:presConceptos.map(v=>v>0?v:null),backgroundColor:'rgba(229,62,62,0.12)',borderColor:'#E53E3E',borderWidth:2,borderRadius:3,borderSkipped:false,xAxisID:'xPc'});
+            const cc=new Chart(elc,{
+              type:'bar',data:{labels:labelsC,datasets:dsC},
+              options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+                plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>{
+                  if(ctx.dataset.label==='Presupuesto') return `Presupuesto: ${fmt(ctx.parsed.x)}`;
+                  const pres=presConceptos[ctx.dataIndex];
+                  return `Gastado: ${fmt(ctx.parsed.x)}${pres?` | ${Math.round(gastosC[ctx.dataIndex]/pres*100)}%`:''}`;
+                }}}},
+                scales:{
+                  x:{ticks:{color:'#888',font:{size:10},callback:v=>{if(v>=1e6)return'$'+Math.round(v/1e6*10)/10+'M';if(v>=1e3)return'$'+Math.round(v/1e3)+'K';return'$'+v;}},grid:{color:'rgba(128,128,128,0.08)'}},
+                  xPc:{display:hayPresCon,position:'top',ticks:{display:false},grid:{display:false}},
+                  y:{grid:{display:false},ticks:{color:'#888',font:{size:11}}}
+                }
+              }
+            });
+            _gpCharts.push(cc);
+          },50);
+        }
+      });
+    }
+  },30);
+}
+
+function gpT(dim,val){
+  if(gpFiltros[dim].has(val)){if(dim!=='proyectos'&&gpFiltros[dim].size===1)return;gpFiltros[dim].delete(val);}
+  else gpFiltros[dim].add(val);
+  renderGastos();
+}
+function gpEst(v){gpFiltros.estado=v;renderGastos();}
+function gpMes(v){gpFiltros.mes=v;renderGastos();}
+function gpTodosProy(todosActivos){
+  const pagosAdapt=pagos.map(p=>({...p,empresa:p.empresaNombre,proyecto:p.proyectoNombre}));
+  const proyDisp=[...new Set(pagosAdapt.filter(p=>gpFiltros.empresas.has(p.empresa)).map(p=>p.proyecto))].sort();
+  if(todosActivos){proyDisp.forEach(p=>gpFiltros.proyectos.delete(p));}
+  else{proyDisp.forEach(p=>gpFiltros.proyectos.add(p));}
+  renderGastos();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CATÁLOGO DE EMPRESAS (presupuestos)
+// ═══════════════════════════════════════════════════════════
+const GP_CONCEPTOS=['Mano de Obra','Ferretería','Madera','Material Pétreo','Transporte','Alq Maq','Apoyo Admtivo','Gastos Legales'];
+
+function abrirCatalogo(){openModal('modalCatalogo');}
+
+function renderCatalogo(){
+  const body=document.getElementById('catalogo-body');
+  if(!body) return;
+  body.innerHTML=empresas.map((emp,ei)=>{
+    const proys=proyectos.filter(p=>p.empresa_id===emp.id);
+    return `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;background:var(--surface);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <span style="background:var(--accent-light);color:var(--accent);border-radius:6px;padding:2px 10px;font-size:13px;font-weight:600;">${emp.nombre}</span>
+        <span style="font-size:12px;color:var(--text3);">${proys.length} proyecto${proys.length!==1?'s':''}</span>
+      </div>
+      ${proys.map((p,pi)=>`
+        <div style="border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 12px;background:var(--bg2);">
+            <span style="font-size:13px;font-weight:600;">${p.nombre}</span>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+              <label style="color:var(--text3);">Presup. total:</label>
+              <input type="text" value="${p.presupuesto>0?new Intl.NumberFormat('es-CO').format(p.presupuesto):''}"
+                placeholder="0" inputmode="numeric"
+                oninput="this.value=this.value.replace(/[^0-9.]/g,'')"
+                onchange="guardarPresupuestoTotal(${p.id},this.value)"
+                style="width:130px;font-size:12px;text-align:right;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
+            </div>
+          </div>
+          <div style="padding:8px 12px;">
+            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">Presupuesto por concepto</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;">
+              ${GP_CONCEPTOS.map(co=>{
+                const pc=presupuestos.find(x=>x.proyecto_id===p.id&&x.concepto===co);
+                return `<div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+                  <span style="flex:1;color:var(--text2);">${co}</span>
+                  <input type="text" value="${pc&&pc.presupuesto>0?new Intl.NumberFormat('es-CO').format(pc.presupuesto):''}"
+                    placeholder="0" inputmode="numeric"
+                    oninput="this.value=this.value.replace(/[^0-9.]/g,'')"
+                    onchange="guardarPresupuestoConcepto(${p.id},'${co}',this.value,${emp.id})"
+                    style="width:110px;font-size:11px;text-align:right;padding:3px 7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
+                </div>`;
+              }).join('')}
+            </div>
+          </div>
+        </div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <input type="text" id="np-${emp.id}" placeholder="Nombre del nuevo proyecto..." style="flex:1;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);">
+        <button class="btn-sm approve" onclick="agregarProyectoCloud(${emp.id},'${emp.nombre}')"><i class="ti ti-plus"></i> Agregar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function guardarPresupuestoTotal(proyId, val){
+  const raw=parseInt(String(val).replace(/\D/g,''))||0;
+  await sb.from('proyectos').update({presupuesto:raw}).eq('id',proyId);
+  const p=proyectos.find(x=>x.id===proyId);
+  if(p) p.presupuesto=raw;
+}
+
+async function guardarPresupuestoConcepto(proyId, concepto, val, empId){
+  const raw=parseInt(String(val).replace(/\D/g,''))||0;
+  await sb.from('presupuestos_concepto').upsert({proyecto_id:proyId,concepto,presupuesto:raw},{onConflict:'proyecto_id,concepto'});
+  // actualizar local
+  const idx=presupuestos.findIndex(x=>x.proyecto_id===proyId&&x.concepto===concepto);
+  if(idx>=0) presupuestos[idx].presupuesto=raw;
+  else presupuestos.push({proyecto_id:proyId,concepto,presupuesto:raw});
+  // sumar en presupuesto total del proyecto
+  const totalCons=presupuestos.filter(x=>x.proyecto_id===proyId).reduce((s,x)=>s+x.presupuesto,0);
+  await sb.from('proyectos').update({presupuesto:totalCons}).eq('id',proyId);
+  const p=proyectos.find(x=>x.id===proyId);
+  if(p){
+    p.presupuesto=totalCons;
+    const inp=document.querySelector(`[onchange="guardarPresupuestoTotal(${proyId},this.value)"]`);
+    if(inp) inp.value=totalCons>0?new Intl.NumberFormat('es-CO').format(totalCons):'';
+  }
+}
+
+async function agregarProyectoCloud(empId, empNombre){
+  const inp=document.getElementById(`np-${empId}`);
+  const nom=inp.value.trim().toUpperCase();
+  if(!nom){alert('Escribe el nombre del proyecto.');return;}
+  const existe=proyectos.find(p=>p.empresa_id===empId&&p.nombre===nom);
+  if(existe){alert(`El proyecto "${nom}" ya existe en ${empNombre}.`);inp.value='';return;}
+  const {data,error}=await sb.from('proyectos').insert({empresa_id:empId,nombre:nom,presupuesto:0}).select().single();
+  if(error){alert('Error al crear proyecto: '+error.message);return;}
+  proyectos.push(data);
+  inp.value='';
+  renderCatalogo();
+  actualizarSelectEmpresas();
 }
 </script>
 </body>
