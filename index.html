@@ -557,8 +557,12 @@ async function iniciarApp(user) {
     document.getElementById('tab-btn-admin').style.display = 'inline-flex';
   }
 
-  // cargar datos
-  await Promise.all([cargarEmpresas(), cargarPagos()]);
+  // cargar datos con manejo de errores
+  try {
+    await Promise.all([cargarEmpresas(), cargarPagos()]);
+  } catch(err) {
+    console.error('Error cargando datos:', err);
+  }
   renderStats();
   renderTabla();
   actualizarSelectEmpresas();
