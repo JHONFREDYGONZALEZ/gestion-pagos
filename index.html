@@ -736,8 +736,22 @@ async function cargarEmpresas() {
 }
 
 async function cargarPagos() {
-  pagos = [];
-  let from = 0;
+  const { data, error } = await sb
+    .from('pagos')
+    .select(`id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)`)
+    .order('created_at', { ascending: false })
+    .limit(1000);
+  if(error){ console.error('cargarPagos error:',error); return; }
+  pagos = (data||[]).map(p => ({
+    ...p,
+    empresaNombre: p.empresa?.nombre || '',
+    proyectoNombre: p.proyecto?.nombre || '',
+  }));
+  // cargar el resto en segundo plano sin bloquear la UI
+  cargarPagosResto(1000);
+}
+
+async function cargarPagosResto(from) {
   const pageSize = 1000;
   while(true) {
     const { data, error } = await sb
@@ -751,7 +765,7 @@ async function cargarPagos() {
       empresaNombre: p.empresa?.nombre || '',
       proyectoNombre: p.proyecto?.nombre || '',
     })));
-    renderStats(); renderTabla(); // actualizar UI después de cada página
+    renderStats();
     if(data.length < pageSize) break;
     from += pageSize;
   }
