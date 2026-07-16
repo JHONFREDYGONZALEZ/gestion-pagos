@@ -10,7 +10,7 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
-  /* ── TOKENS ─────────────────────────────────────── */
+  /* -- TOKENS --------------------------------------- */
   :root{
     --accent:#534AB7;--accent2:#1D9E75;--danger:#E53E3E;--warn:#BA7517;
     --bg:#F7F7FA;--surface:#FFFFFF;--bg2:#F0F0F5;
@@ -24,7 +24,7 @@
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;}
 
-  /* ── LOGIN ──────────────────────────────────────── */
+  /* -- LOGIN ---------------------------------------- */
   #login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
   .login-card{background:var(--surface);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:40px 36px;width:100%;max-width:400px;}
   .login-logo{text-align:center;margin-bottom:28px;}
@@ -38,7 +38,7 @@
   .btn-login:hover{opacity:.9;}
   .login-error{font-size:13px;color:var(--danger);text-align:center;margin-top:10px;display:none;}
 
-  /* ── APP SHELL ──────────────────────────────────── */
+  /* -- APP SHELL ------------------------------------ */
   #app-screen{display:none;min-height:100vh;flex-direction:column;}
   .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:16px;height:54px;position:sticky;top:0;z-index:100;}
   .topbar-brand{font-size:15px;font-weight:700;color:var(--accent);margin-right:8px;}
@@ -50,17 +50,17 @@
   .role-badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--accent-light);color:var(--accent);}
   .btn-logout{padding:5px 10px;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px;background:none;color:var(--text2);}
 
-  /* ── MAIN CONTENT ───────────────────────────────── */
+  /* -- MAIN CONTENT --------------------------------- */
   main{flex:1;padding:20px 24px;max-width:1400px;margin:0 auto;width:100%;}
   .section{display:none;}
   .section.active{display:block;}
 
-  /* ── CARDS ──────────────────────────────────────── */
+  /* -- CARDS ---------------------------------------- */
   .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;box-shadow:var(--shadow);}
   .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
   .card-title{font-size:15px;font-weight:600;}
 
-  /* ── BOTONES ────────────────────────────────────── */
+  /* -- BOTONES -------------------------------------- */
   .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;font-size:13px;font-weight:500;background:var(--surface);color:var(--text);transition:all .15s;}
   .btn:hover{background:var(--bg2);}
   .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
@@ -72,12 +72,12 @@
   .btn-sm.del{color:var(--danger);}
   .btn-sm:disabled{opacity:.4;cursor:not-allowed;}
 
-  /* ── FILTROS ────────────────────────────────────── */
+  /* -- FILTROS -------------------------------------- */
   .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
   .filters input,.filters select{padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--surface);outline:none;height:34px;}
   .filters input:focus,.filters select:focus{border-color:var(--accent);}
 
-  /* ── TABLA ──────────────────────────────────────── */
+  /* -- TABLA ---------------------------------------- */
   .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);max-height:calc(100vh - 320px);overflow-y:auto;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th{padding:9px 12px;background:var(--bg2);font-weight:600;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
@@ -87,14 +87,14 @@
   .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .actions-cell{display:flex;gap:4px;align-items:center;}
 
-  /* ── BADGES ─────────────────────────────────────── */
+  /* -- BADGES --------------------------------------- */
   .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
   .badge.pagada{background:var(--green-bg);color:var(--green);}
   .badge.pendiente{background:var(--orange-bg);color:var(--orange);}
   .cod-tag{font-family:monospace;font-size:11px;background:var(--bg2);padding:2px 6px;border-radius:4px;border:1px solid var(--border2);}
   .cod-tag.empty{color:var(--text3);border-style:dashed;}
 
-  /* ── STATS ───────────────────────────────────────── */
+  /* -- STATS ----------------------------------------- */
   .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;}
   .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;}
   .stat-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;}
@@ -103,7 +103,7 @@
   .stat-value.green{color:var(--green);}
   .stat-value.orange{color:var(--orange);}
 
-  /* ── MODALES ─────────────────────────────────────── */
+  /* -- MODALES --------------------------------------- */
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center;padding:20px;}
   .modal-bg.open{display:flex;}
   .modal{background:var(--surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,.18);}
@@ -118,22 +118,22 @@
   .info-box{background:var(--accent-light);border:1px solid #c5c1f0;border-radius:var(--radius);padding:10px 14px;font-size:12px;color:var(--accent);display:flex;gap:8px;align-items:flex-start;margin-top:12px;}
   .notice{font-size:11px;color:var(--text3);margin-top:3px;}
 
-  /* ── TOTAL FILTRADO ──────────────────────────────── */
+  /* -- TOTAL FILTRADO -------------------------------- */
   #fila-total-valor{background:var(--accent-light);border:1px solid var(--accent);border-radius:var(--radius);padding:10px 16px;margin-bottom:12px;}
 
-  /* ── LOADING ─────────────────────────────────────── */
+  /* -- LOADING --------------------------------------- */
   #loading{position:fixed;inset:0;background:rgba(247,247,250,.85);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-size:14px;color:var(--text2);}
   .spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
 
-  /* ── EMPTY STATE ─────────────────────────────────── */
+  /* -- EMPTY STATE ----------------------------------- */
   #empty{display:none;padding:40px;text-align:center;color:var(--text3);}
 
-  /* ── ADMIN USUARIOS ──────────────────────────────── */
+  /* -- ADMIN USUARIOS -------------------------------- */
   .user-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
   .user-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;}
 
-  /* ── RESPONSIVE ──────────────────────────────────── */
+  /* -- RESPONSIVE ------------------------------------ */
   @media(max-width:768px){
     .stats{grid-template-columns:1fr 1fr;}
     .form-grid{grid-template-columns:1fr;}
@@ -482,16 +482,16 @@
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════════════
+// ===
 // CONFIGURACIÓN SUPABASE
-// ═══════════════════════════════════════════════════════════
+// ===
 const SUPABASE_URL = 'https://zcrwgoydzuqocwrpcrld.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjcndnb3lkenVxb2N3cnBjcmxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4ODEzNTYsImV4cCI6MjA5OTQ1NzM1Nn0.gHDb5ZJFN-APN6w10F9zpyVCQwVo3pAU5BbG4wuz13o'; // ← reemplazar con tu anon key
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // ESTADO GLOBAL
-// ═══════════════════════════════════════════════════════════
+// ===
 let currentUser = null;
 let currentPerfil = null;
 let pagos = [];
@@ -507,9 +507,9 @@ let aprobacionId = null;
 const CONCEPTOS = ['Mano de Obra','Ferretería','Madera','Material Pétreo','Transporte','Alq Maq','Apoyo Admtivo','Gastos Legales'];
 const TIPOS = ['Prov Tranferencia','Prov PSE','Caja','Anticipo','Préstamo','Viáticos','Reembolso','Nomina','Crédito','Provisión'];
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // ARRANQUE
-// ═══════════════════════════════════════════════════════════
+// ===
 window.addEventListener('DOMContentLoaded', async () => {
   const { data: { session } } = await sb.auth.getSession();
   // timeout de seguridad — si tarda más de 15 segundos, ocultar loading
@@ -570,9 +570,9 @@ async function iniciarApp(user) {
   show('app-screen');
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // AUTH
-// ═══════════════════════════════════════════════════════════
+// ===
 function togglePriorizado(id, checked){
   if(checked) priorizados.add(id);
   else priorizados.delete(id);
@@ -728,9 +728,9 @@ async function toggleActivo(id, activo) {
   cargarUsuarios();
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // CARGA DE DATOS
-// ═══════════════════════════════════════════════════════════
+// ===
 async function cargarEmpresas() {
   const { data: emps } = await sb.from('empresas').select('*').order('nombre');
   empresas = emps || [];
@@ -776,9 +776,9 @@ async function cargarPagosResto(from) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // HELPERS UI
-// ═══════════════════════════════════════════════════════════
+// ===
 function show(id) { const el=document.getElementById(id); if(el){ el.style.display = el.id==='app-screen'?'flex':'block'; }}
 function hide(id) { const el=document.getElementById(id); if(el) el.style.display='none'; }
 function g(id) { return document.getElementById(id)?.value?.trim()||''; }
@@ -810,9 +810,9 @@ function codHTML(c) {
   return c?`<span class="cod-tag">${c}</span>`:`<span class="cod-tag empty">Sin código</span>`;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // STATS
-// ═══════════════════════════════════════════════════════════
+// ===
 function renderStats() {
   document.getElementById('st-total').textContent = pagos.length;
   document.getElementById('st-pendientes').textContent = pagos.filter(p=>p.estado==='Pendiente').length;
@@ -820,9 +820,9 @@ function renderStats() {
   document.getElementById('st-valor').textContent = fmt(pagos.reduce((s,p)=>s+p.valor,0));
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // TABLA
-// ═══════════════════════════════════════════════════════════
+// ===
 function actualizarSelectEmpresas() {
   const fEmp = document.getElementById('filtroEmpresa');
   if (fEmp) {
@@ -933,9 +933,9 @@ function renderTabla() {
   </tr>`).join('');
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // CRUD PAGOS
-// ═══════════════════════════════════════════════════════════
+// ===
 function autocompletarTercero(){
   const idVal=document.getElementById('f-idtercero').value.replace(/\D/g,'');
   const hint=document.getElementById('f-idtercero-hint');
@@ -1023,7 +1023,7 @@ async function eliminarPago(id){
   hide('loading');
 }
 
-// ─── EDITAR ───────────────────────────────────────────────
+// --- EDITAR -----------------------------------------------
 function abrirEditar(id){
   const p=pagos.find(x=>x.id===id);if(!p)return;
   editandoId=id;_guardandoEdicion=false;
@@ -1098,7 +1098,7 @@ async function guardarEdicion(){
   hide('loading');closeModal('modalEditar');editandoId=null;_guardandoEdicion=false;
 }
 
-// ─── APROBACIONES ─────────────────────────────────────────
+// --- APROBACIONES -----------------------------------------
 async function abrirAprobacion(id){
   const p=pagos.find(x=>x.id===id);if(!p)return;
   aprobacionId=id;
@@ -1167,9 +1167,9 @@ async function aprobar(pagoId, perfilId, rol){
   await abrirAprobacion(pagoId); // refrescar modal
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // IMPORTAR EXCEL
-// ═══════════════════════════════════════════════════════════
+// ===
 function handleFile(e){
   const file=e.target.files[0];if(!file)return;
   if(!/\.(xlsx|xls)$/i.test(file.name)){alert('Archivo debe ser .xlsx o .xls');return;}
@@ -1307,9 +1307,9 @@ function handleFile(e){
   reader.readAsArrayBuffer(file);
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // EXPORTAR EXCEL
-// ═══════════════════════════════════════════════════════════
+// ===
 function exportarExcel(){
   const filas=pagos.map(p=>({
     'No. egreso':p.num_egreso||'—',
@@ -1333,9 +1333,9 @@ function exportarExcel(){
   XLSX.writeFile(wb,`egresos_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.xlsx`);
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // MODALES
-// ═══════════════════════════════════════════════════════════
+// ===
 function openModal(id){
   document.getElementById(id).classList.add('open');
   if(id==='modalNuevo') openNuevo();
@@ -1349,9 +1349,9 @@ function closeModal(id){
   if(id==='modalDuplicado')_pagoPendienteGuardar=null;
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // TABS
-// ═══════════════════════════════════════════════════════════
+// ===
 function showTab(tab, el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -1361,9 +1361,9 @@ function showTab(tab, el){
   if(tab==='tab-gastos') renderGastos();
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // GASTOS POR PAGADOR
-// ═══════════════════════════════════════════════════════════
+// ===
 const GP_PALETA=['#534AB7','#1D9E75','#D85A30','#185FA5','#BA7517','#993556','#791F1F','#0C447C'];
 const GP_EMPRESAS=['ASES','PNR','JSM','AMBIENTALES'];
 let _gpCharts=[];
@@ -1678,9 +1678,9 @@ function gpTodosProy(todosActivos){
   renderGastos();
 }
 
-// ═══════════════════════════════════════════════════════════
+// ===
 // CATÁLOGO DE EMPRESAS (presupuestos)
-// ═══════════════════════════════════════════════════════════
+// ===
 const GP_CONCEPTOS=['Mano de Obra','Ferretería','Madera','Material Pétreo','Transporte','Alq Maq','Apoyo Admtivo','Gastos Legales'];
 
 function abrirCatalogo(){openModal('modalCatalogo');}
@@ -1771,4 +1771,6 @@ async function agregarProyectoCloud(empId, empNombre){
   renderCatalogo();
   actualizarSelectEmpresas();
 }
-</s
+</script>
+</body>
+</html>
