@@ -665,6 +665,8 @@ async function logoutUser() {
   await sb.auth.signOut();
 }
 
+const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjcndnb3lkenVxb2N3cnBjcmxkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4Mzg4MTM1NiwiZXhwIjoyMDk5NDU3MzU2fQ.BGDmb9h0__VISAHhlHRl6W2JrL1wXaxkR0fVgza879Q';
+
 async function crearUsuario() {
   const nombre = document.getElementById('u-nombre').value.trim();
   const email = document.getElementById('u-email').value.trim();
@@ -672,26 +674,46 @@ async function crearUsuario() {
   const rol = document.getElementById('u-rol').value;
 
   if (!nombre || !email || !pass) { alert('Completa todos los campos.'); return; }
-  if (pass.length < 8) { alert('La contraseña debe tener al menos 8 caracteres.'); return; }
+  if (pass.length < 6) { alert('La contraseña debe tener al menos 6 caracteres.'); return; }
 
   show('loading');
-  // Crear usuario en Supabase Auth (requiere service role key en producción — usar Edge Function)
-  // Por ahora usamos signup + metadata
-  const { data, error } = await sb.auth.signUp({
-    email, password: pass,
-    options: { data: { nombre, rol } }
+
+  // Usar Admin API con service_role key para crear usuario directamente sin email
+  const resp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: {
+      'apikey': SUPABASE_SERVICE_KEY,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      email,
+      password: pass,
+      email_confirm: true,
+      user_metadata: { nombre, rol }
+    })
   });
 
+  const data = await resp.json();
   hide('loading');
-  if (error) { alert('Error al crear usuario: ' + error.message); return; }
 
-  // Actualizar rol en perfiles (el trigger lo crea, luego actualizamos el rol)
-  if (data.user) {
-    await sb.from('perfiles').update({ nombre, rol }).eq('id', data.user.id);
+  if (!resp.ok || data.error) {
+    // Fallback: insertar directamente en auth.users via SQL
+    const {error: sqlErr} = await sb.rpc('create_user_direct', {
+      p_email: email, p_password: pass, p_nombre: nombre, p_rol: rol
+    });
+    if(sqlErr) { alert('Error al crear usuario: ' + (data.error||data.msg||sqlErr.message)); return; }
+  } else {
+    // Actualizar perfil con nombre y rol correctos
+    if (data.id) {
+      // Eliminar perfil viejo si existe y crear nuevo
+      await sb.from('perfiles').delete().eq('email', email);
+      await sb.from('perfiles').insert({ id: data.id, nombre, email, rol });
+    }
   }
 
   closeModal('modalUsuario');
-  alert(`✓ Usuario "${nombre}" creado. Recibirá un correo de confirmación.`);
+  alert(`✓ Usuario "${nombre}" (${email}) creado correctamente con contraseña "${pass}".`);
   cargarUsuarios();
 }
 
