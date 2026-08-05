@@ -695,6 +695,7 @@ async function crearUsuario() {
   });
 
   const data = await resp.json();
+  console.log('Admin API response:', resp.status, JSON.stringify(data));
   hide('loading');
 
   if (!resp.ok || data.error) {
