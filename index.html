@@ -495,7 +495,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let currentPerfil = null;
 let pagos = [];
-let priorizados = new Set(); // IDs de pagos seleccionados para priorizar
+let priorizados = new Set();
+let aprobacionesMap = {}; // {pago_id: [{perfil_id, rol, estado}]} // IDs de pagos seleccionados para priorizar
 let empresas = [];
 let proyectos = [];
 let presupuestos = [];
@@ -777,6 +778,17 @@ async function cargarPagos() {
   }));
   // cargar el resto en segundo plano sin bloquear la UI
   cargarPagosResto(1000);
+  cargarAprobaciones();
+}
+
+async function cargarAprobaciones(){
+  const {data}=await sb.from('aprobaciones').select('pago_id,perfil_id,rol,estado').eq('estado','aprobado');
+  aprobacionesMap={};
+  (data||[]).forEach(a=>{
+    if(!aprobacionesMap[a.pago_id]) aprobacionesMap[a.pago_id]=[];
+    aprobacionesMap[a.pago_id].push(a);
+  });
+  renderTabla();
 }
 
 async function cargarPagosResto(from) {
@@ -956,7 +968,7 @@ function renderTabla() {
     <td>${badgeHTML(p.estado)}</td>
     <td class="trunc" style="max-width:120px;" title="${p.comentario||''}">${p.comentario||'—'}</td>
     <td><div class="actions-cell">
-      ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="${p.estado==='Pagada'?'Aprobado':'Pendiente aprobación'}" style="border-color:${p.estado==='Pagada'?'#27500A':'#D97706'};color:${p.estado==='Pagada'?'#27500A':'#D97706'};background:${p.estado==='Pagada'?'#EAF3DE':'#FEF3C7'};font-size:14px;padding:3px 7px;">${p.estado==='Pagada'?'✓':'⏱'}</button>`:''}
+      ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="${p.estado==='Pagada'?'Aprobado':'Pendiente aprobación'}" style="border-color:${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'#27500A':'#D97706'};color:${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'#27500A':'#D97706'};background:${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'#EAF3DE':'#FEF3C7'};font-size:14px;padding:3px 7px;">${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'✓':'⏱'}</button>`:''}
       ${puedeEditar?`<button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar" style="border-color:#3B82F6;color:#3B82F6;background:#EFF6FF;font-size:13px;padding:3px 7px;">✏️</button>`:''}
       ${puedeEliminar?`<button class="btn-sm" onclick="eliminarPago(${p.id})" ${p.estado==='Pagada'?'disabled':''} title="Eliminar" style="${p.estado==='Pagada'?'opacity:.35;cursor:not-allowed;':'border-color:#E53E3E;color:#E53E3E;background:#FEF2F2;'}font-size:13px;padding:3px 7px;">🗑</button>`:''}
     </div></td>
@@ -1199,14 +1211,18 @@ async function aprobar(pagoId, perfilId, rol){
     });
   }
 
-  // si es gerencia o pagador con rol gerencia → marcar como Pagada
+  // si es gerencia → marcar como Pagada
   if(rol==='gerencia'){
     await sb.from('pagos').update({estado:'Pagada',fecha_pago:new Date().toISOString().split('T')[0]}).eq('id',pagoId);
+    const pLocal=pagos.find(x=>x.id===pagoId);
+    if(pLocal){pLocal.estado='Pagada';pLocal.fecha_pago=new Date().toISOString().split('T')[0];}
   }
 
-  await cargarPagos();renderStats();renderTabla();
+  renderStats();renderTabla();
   hide('loading');
+  await cargarAprobaciones();
   await abrirAprobacion(pagoId);
+  cargarPagosResto(0);
 }
 
 // ===
