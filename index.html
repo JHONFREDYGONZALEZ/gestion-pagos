@@ -806,7 +806,14 @@ function show(id) { const el=document.getElementById(id); if(el){ el.style.displ
 function hide(id) { const el=document.getElementById(id); if(el) el.style.display='none'; }
 function g(id) { return document.getElementById(id)?.value?.trim()||''; }
 function fmt(n) { return new Intl.NumberFormat('es-CO',{style:'currency',currency:'COP',maximumFractionDigits:0}).format(n||0); }
-function fmtDate(d) { if(!d) return '—'; try { return new Date(d+'T12:00:00').toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'}); } catch(e){return d;} }
+function fmtDate(d) { 
+  if(!d) return '—'; 
+  try { 
+    // Si ya tiene hora (ISO timestamp), usarlo directamente; si no, agregar T12:00:00
+    const fecha = d.includes('T') ? new Date(d) : new Date(d+'T12:00:00');
+    return fecha.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'}); 
+  } catch(e){return d;} 
+}
 function capitalizar(s) { if(!s)return''; return s.toLowerCase().replace(/(^\s*\S)|(\s+\S)/g,c=>c.toUpperCase()); }
 function capitalizarFrase(s) { if(!s)return''; const t=s.trim(); return t.charAt(0).toUpperCase()+t.slice(1).toLowerCase(); }
 function fmtIdInput(el) {
@@ -1180,15 +1187,15 @@ async function aprobar(pagoId, perfilId, rol){
   const {data:existente}=await sb.from('aprobaciones')
     .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1);
 
+  const fechaAhora = new Date().toISOString();
+
   if(existente&&existente.length>0){
-    // Actualizar la existente
     await sb.from('aprobaciones').update({
-      estado:'aprobado', fecha:new Date().toISOString(), rol
+      estado:'aprobado', fecha:fechaAhora, rol
     }).eq('id',existente[0].id);
   } else {
-    // Insertar nueva
     await sb.from('aprobaciones').insert({
-      pago_id:pagoId, perfil_id:perfilId, rol, estado:'aprobado', fecha:new Date().toISOString()
+      pago_id:pagoId, perfil_id:perfilId, rol, estado:'aprobado', fecha:fechaAhora
     });
   }
 
