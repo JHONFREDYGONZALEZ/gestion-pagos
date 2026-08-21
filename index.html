@@ -1074,10 +1074,11 @@ function abrirEditar(id){
   document.getElementById('e-comentario').value=p.comentario||'';
 
   // bloquear campos si Pagada
-  const bloqueados=['e-empresa','e-proyecto','e-concepto','e-idtercero','e-nombretercero','e-nombrepago','e-tipo','e-egreso','e-comentario'];
+  const bloqueados=['e-empresa','e-proyecto','e-concepto','e-idtercero','e-nombretercero','e-nombrepago','e-tipo','e-comentario'];
   // valor solo editable por admin y pagador
   const puedeEditarValor = ['admin','pagador'].includes(currentPerfil?.rol);
   if(!puedeEditarValor) bloqueados.push('e-valor');
+  // num_egreso siempre editable (incluso en pagados)
   bloqueados.forEach(id=>{
     const el=document.getElementById(id);
     if(el){el.disabled=esPagada;el.style.opacity=esPagada?'.6':'1';}
@@ -1175,19 +1176,30 @@ async function aprobar(pagoId, perfilId, rol){
   const p=pagos.find(x=>x.id===pagoId);if(!p)return;
   show('loading');
 
-  // upsert aprobación
-  await sb.from('aprobaciones').upsert({
-    pago_id:pagoId, perfil_id:perfilId, rol, estado:'aprobado', fecha:new Date().toISOString()
-  },{onConflict:'pago_id,perfil_id'});
+  // Verificar si ya existe una aprobacion de este usuario para este pago
+  const {data:existente}=await sb.from('aprobaciones')
+    .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1);
 
-  // si es gerencia → marcar como Pagada
+  if(existente&&existente.length>0){
+    // Actualizar la existente
+    await sb.from('aprobaciones').update({
+      estado:'aprobado', fecha:new Date().toISOString(), rol
+    }).eq('id',existente[0].id);
+  } else {
+    // Insertar nueva
+    await sb.from('aprobaciones').insert({
+      pago_id:pagoId, perfil_id:perfilId, rol, estado:'aprobado', fecha:new Date().toISOString()
+    });
+  }
+
+  // si es gerencia o pagador con rol gerencia → marcar como Pagada
   if(rol==='gerencia'){
     await sb.from('pagos').update({estado:'Pagada',fecha_pago:new Date().toISOString().split('T')[0]}).eq('id',pagoId);
   }
 
   await cargarPagos();renderStats();renderTabla();
   hide('loading');
-  await abrirAprobacion(pagoId); // refrescar modal
+  await abrirAprobacion(pagoId);
 }
 
 // ===
