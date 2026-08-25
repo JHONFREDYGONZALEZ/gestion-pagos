@@ -1045,11 +1045,20 @@ async function confirmarGuardarPago(){
 
 async function insertarPago(obj){
   show('loading');
-  const { error } = await sb.from('pagos').insert(obj);
+  const { data, error } = await sb.from('pagos').insert(obj).select(`id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)`).single();
   if(error){hide('loading');alert('Error al guardar: '+error.message);return;}
-  await cargarPagos();
+  // Agregar inmediatamente en memoria sin esperar recarga completa
+  if(data){
+    pagos.unshift({
+      ...data,
+      empresaNombre: data.empresa?.nombre||'',
+      proyectoNombre: data.proyecto?.nombre||'',
+    });
+  }
   renderStats();renderTabla();actualizarSelectEmpresas();
   hide('loading');closeModal('modalNuevo');
+  // Recargar en segundo plano para sincronizar
+  cargarPagosResto(0);
 }
 
 async function eliminarPago(id){
