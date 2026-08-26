@@ -210,33 +210,33 @@
           <span class="card-title">Registro de egresos</span>
         </div>
         <div class="filters" id="filtros-bar">
-          <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla()" style="width:160px;">
-          <input type="text" placeholder="🏦 Cód Banco..." id="filtroCod" oninput="renderTabla()" style="width:160px;">
-          <input type="text" placeholder="👤 Nombre..." id="filtroNombre" oninput="renderTabla()" style="width:160px;">
-          <select id="filtroEstado" onchange="renderTabla()" style="width:160px;">
+          <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          <input type="text" placeholder="🏦 Cód Banco..." id="filtroCod" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          <input type="text" placeholder="👤 Nombre..." id="filtroNombre" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:160px;">
             <option value="">Todos los estados</option>
             <option>Pendiente</option><option>Pagada</option>
           </select>
-          <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla()" style="width:160px;">
+          <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
             <option value="">Todos los pagadores</option>
           </select>
-          <select id="filtroProyecto" onchange="renderTabla()" style="width:160px;">
+          <select id="filtroProyecto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
             <option value="">Todos los proyectos</option>
           </select>
-          <select id="filtroConcepto" onchange="renderTabla()" style="width:160px;">
+          <select id="filtroConcepto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
             <option value="">Todos los conceptos</option>
             <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
             <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
             <option>Apoyo Admtivo</option><option>Gastos Legales</option>
           </select>
-          <select id="filtroTipo" onchange="renderTabla()" style="width:160px;">
+          <select id="filtroTipo" onchange="renderTabla();guardarFiltros()" style="width:160px;">
             <option value="">Todos los tipos de pago</option>
           </select>
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
-            <input type="date" id="filtroFechaDesde" onchange="renderTabla()" style="width:160px;">
+            <input type="date" id="filtroFechaDesde" onchange="renderTabla();guardarFiltros()" style="width:160px;">
           </label>
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">hasta
-            <input type="date" id="filtroFechaHasta" onchange="renderTabla()" style="width:160px;">
+            <input type="date" id="filtroFechaHasta" onchange="renderTabla();guardarFiltros()" style="width:160px;">
           </label>
         </div>
 
@@ -565,8 +565,9 @@ async function iniciarApp(user) {
     console.error('Error cargando datos:', err);
   }
   renderStats();
-  renderTabla();
   actualizarSelectEmpresas();
+  restaurarFiltros();
+  renderTabla();
   hide('loading');
   show('app-screen');
 }
@@ -912,6 +913,40 @@ function onEmpresaChangeEdit() {
   sel.innerHTML = proys.map(p=>`<option value="${p.id}">${p.nombre}</option>`).join('');
 }
 
+function guardarFiltros(){
+  try{
+    const f={
+      buscar:document.getElementById('buscar')?.value||'',
+      filtroEstado:document.getElementById('filtroEstado')?.value||'',
+      filtroEmpresa:document.getElementById('filtroEmpresa')?.value||'',
+      filtroCod:document.getElementById('filtroCod')?.value||'',
+      filtroNombre:document.getElementById('filtroNombre')?.value||'',
+      filtroProyecto:document.getElementById('filtroProyecto')?.value||'',
+      filtroConcepto:document.getElementById('filtroConcepto')?.value||'',
+      filtroTipo:document.getElementById('filtroTipo')?.value||'',
+      filtroFechaDesde:document.getElementById('filtroFechaDesde')?.value||'',
+      filtroFechaHasta:document.getElementById('filtroFechaHasta')?.value||'',
+    };
+    localStorage.setItem('gp_filtros',JSON.stringify(f));
+  }catch(e){}
+}
+
+function restaurarFiltros(){
+  try{
+    const f=JSON.parse(localStorage.getItem('gp_filtros')||'{}');
+    if(f.buscar) document.getElementById('buscar').value=f.buscar;
+    if(f.filtroEstado) document.getElementById('filtroEstado').value=f.filtroEstado;
+    if(f.filtroEmpresa){document.getElementById('filtroEmpresa').value=f.filtroEmpresa;actualizarSelectEmpresas();}
+    if(f.filtroCod) document.getElementById('filtroCod').value=f.filtroCod;
+    if(f.filtroNombre) document.getElementById('filtroNombre').value=f.filtroNombre;
+    if(f.filtroProyecto) document.getElementById('filtroProyecto').value=f.filtroProyecto;
+    if(f.filtroConcepto) document.getElementById('filtroConcepto').value=f.filtroConcepto;
+    if(f.filtroTipo) document.getElementById('filtroTipo').value=f.filtroTipo;
+    if(f.filtroFechaDesde) document.getElementById('filtroFechaDesde').value=f.filtroFechaDesde;
+    if(f.filtroFechaHasta) document.getElementById('filtroFechaHasta').value=f.filtroFechaHasta;
+  }catch(e){}
+}
+
 function renderTabla() {
   const q = document.getElementById('buscar').value.toLowerCase();
   const fe = g('filtroEstado');
@@ -1045,19 +1080,16 @@ async function confirmarGuardarPago(){
 
 async function insertarPago(obj){
   show('loading');
-  const { data, error } = await sb.from('pagos').insert(obj).select(`id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)`).single();
+  const { data, error } = await sb.from('pagos').insert(obj).select('id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario').single();
   if(error){hide('loading');alert('Error al guardar: '+error.message);return;}
-  // Agregar inmediatamente en memoria sin esperar recarga completa
+  // Agregar inmediatamente en memoria
   if(data){
-    pagos.unshift({
-      ...data,
-      empresaNombre: data.empresa?.nombre||'',
-      proyectoNombre: data.proyecto?.nombre||'',
-    });
+    const emp=empresas.find(e=>e.id===data.empresa_id);
+    const proy=proyectos.find(p=>p.id===data.proyecto_id);
+    pagos.unshift({...data, empresaNombre:emp?.nombre||'', proyectoNombre:proy?.nombre||''});
   }
   renderStats();renderTabla();actualizarSelectEmpresas();
   hide('loading');closeModal('modalNuevo');
-  // Recargar en segundo plano para sincronizar
   cargarPagosResto(0);
 }
 
