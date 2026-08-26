@@ -233,10 +233,10 @@
             <option value="">Todos los tipos de pago</option>
           </select>
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
-            <input type="date" id="filtroFechaDesde" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+            <input type="date" id="filtroFechaDesde" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
           </label>
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">hasta
-            <input type="date" id="filtroFechaHasta" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+            <input type="date" id="filtroFechaHasta" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
           </label>
         </div>
 
@@ -1153,9 +1153,11 @@ async function guardarEdicion(){
   const p=pagos.find(x=>x.id===editandoId);if(!p)return;
   _guardandoEdicion=true;
 
+  // num_egreso siempre editable
   const updates={
     cod_bancolombia:g('e-bancolombia')||null,
     fecha_pago:g('e-fechapago')||null,
+    num_egreso:g('e-egreso')||null,
   };
 
   if(p.estado!=='Pagada'){
@@ -1173,13 +1175,21 @@ async function guardarEdicion(){
     }
     Object.assign(updates,{empresa_id:parseInt(empresa_id),proyecto_id:parseInt(proyecto_id),
       concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
-      num_egreso:g('e-egreso')||null,comentario:capitalizarFrase(g('e-comentario'))||null});
+      comentario:capitalizarFrase(g('e-comentario'))||null});
   }
 
   show('loading');
   await sb.from('pagos').update(updates).eq('id',editandoId);
-  await cargarPagos();renderStats();renderTabla();
+
+  // Actualizar en memoria inmediatamente sin recargar todo
+  Object.assign(p, updates);
+  if(updates.empresa_id){const emp=empresas.find(e=>e.id===updates.empresa_id);if(emp)p.empresaNombre=emp.nombre;}
+  if(updates.proyecto_id){const proy=proyectos.find(pr=>pr.id===updates.proyecto_id);if(proy)p.proyectoNombre=proy.nombre;}
+
+  renderStats();renderTabla();
   hide('loading');closeModal('modalEditar');editandoId=null;_guardandoEdicion=false;
+  // Sincronizar en segundo plano
+  cargarPagosResto(0);
 }
 
 // --- APROBACIONES -----------------------------------------
