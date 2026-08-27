@@ -505,6 +505,7 @@ let proyectos = [];
 let presupuestos = [];
 let editandoId = null;
 let _guardandoEdicion = false;
+let _insertando = false;
 let _pagoPendienteGuardar = null;
 let aprobacionId = null;
 
@@ -1102,25 +1103,28 @@ async function confirmarGuardarPago(){
 }
 
 async function insertarPago(obj){
-  // Deshabilitar botón guardar para evitar doble clic
+  if(_insertando) return;
+  _insertando = true;
+
+  // Deshabilitar botón para evitar doble clic
   const btnGuardar=document.querySelector('#modalNuevo .btn.primary');
   if(btnGuardar){btnGuardar.disabled=true;btnGuardar.textContent='Guardando...';}
 
-  const { data, error } = await sb.from('pagos').insert(obj).select('id,fecha_creacion').single();
+  const { error } = await sb.from('pagos').insert(obj);
 
-  if(error){
-    if(btnGuardar){btnGuardar.disabled=false;btnGuardar.innerHTML='<i class="ti ti-check"></i> Guardar pago';}
-    alert('Error al guardar: '+error.message);
-    return;
-  }
+  // Rehabilitar botón
+  if(btnGuardar){btnGuardar.disabled=false;btnGuardar.innerHTML='<i class="ti ti-check"></i> Guardar pago';}
+  _insertando = false;
 
-  // Agregar en memoria con el ID real de Supabase
+  if(error){alert('Error al guardar: '+error.message);return;}
+
+  // Agregar en memoria con ID temporal
   const emp=empresas.find(e=>e.id==obj.empresa_id);
   const proy=proyectos.find(p=>p.id==obj.proyecto_id);
   pagos.unshift({
     ...obj,
-    id: data.id,
-    fecha_creacion: data.fecha_creacion||new Date().toISOString().split('T')[0],
+    id: Date.now(),
+    fecha_creacion: new Date().toISOString().split('T')[0],
     empresaNombre: emp?.nombre||'',
     proyectoNombre: proy?.nombre||'',
   });
