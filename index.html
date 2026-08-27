@@ -1229,8 +1229,8 @@ async function guardarEdicion(){
   renderStats();renderTabla();
   hide('loading');closeModal('modalEditar');
   editandoId=null;_guardandoEdicion=false;
-  const btnEdit=document.querySelector('#modalEditar .btn.primary');
-  if(btnEdit){btnEdit.disabled=false;btnEdit.innerHTML='<i class="ti ti-check"></i> Guardar cambios';}
+  const btnEditClose=document.querySelector('#modalEditar .btn.primary');
+  if(btnEditClose){btnEditClose.disabled=false;btnEditClose.innerHTML='<i class="ti ti-check"></i> Guardar cambios';}
 }
 
 // --- APROBACIONES -----------------------------------------
