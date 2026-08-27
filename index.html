@@ -1102,29 +1102,31 @@ async function confirmarGuardarPago(){
 }
 
 async function insertarPago(obj){
-  // Agregar en memoria inmediatamente y cerrar modal sin esperar Supabase
+  // Deshabilitar botón guardar para evitar doble clic
+  const btnGuardar=document.querySelector('#modalNuevo .btn.primary');
+  if(btnGuardar){btnGuardar.disabled=true;btnGuardar.textContent='Guardando...';}
+
+  const { data, error } = await sb.from('pagos').insert(obj).select('id,fecha_creacion').single();
+
+  if(error){
+    if(btnGuardar){btnGuardar.disabled=false;btnGuardar.innerHTML='<i class="ti ti-check"></i> Guardar pago';}
+    alert('Error al guardar: '+error.message);
+    return;
+  }
+
+  // Agregar en memoria con el ID real de Supabase
   const emp=empresas.find(e=>e.id==obj.empresa_id);
   const proy=proyectos.find(p=>p.id==obj.proyecto_id);
-  const nuevoLocal={
+  pagos.unshift({
     ...obj,
-    id: Date.now(),
-    fecha_creacion: new Date().toISOString().split('T')[0],
+    id: data.id,
+    fecha_creacion: data.fecha_creacion||new Date().toISOString().split('T')[0],
     empresaNombre: emp?.nombre||'',
     proyectoNombre: proy?.nombre||'',
-  };
-  pagos.unshift(nuevoLocal);
+  });
+
   renderStats();renderTabla();actualizarSelectEmpresas();
   closeModal('modalNuevo');
-
-  // Insertar en Supabase en segundo plano
-  const { error } = await sb.from('pagos').insert(obj);
-  if(error){
-    // Si falla, quitar el registro temporal de memoria
-    const idx=pagos.findIndex(p=>p.id===nuevoLocal.id);
-    if(idx>=0) pagos.splice(idx,1);
-    renderStats();renderTabla();
-    alert('Error al guardar: '+error.message);
-  }
 }
 
 async function eliminarPago(id){
@@ -1187,6 +1189,10 @@ async function guardarEdicion(){
   const p=pagos.find(x=>x.id===editandoId);if(!p)return;
   _guardandoEdicion=true;
 
+  // Deshabilitar botón para evitar doble clic
+  const btnEdit=document.querySelector('#modalEditar .btn.primary');
+  if(btnEdit){btnEdit.disabled=true;btnEdit.textContent='Guardando...';}
+
   // num_egreso siempre editable
   const updates={
     cod_bancolombia:g('e-bancolombia')||null,
@@ -1221,7 +1227,10 @@ async function guardarEdicion(){
   if(updates.proyecto_id){const proy=proyectos.find(pr=>pr.id===updates.proyecto_id);if(proy)p.proyectoNombre=proy.nombre;}
 
   renderStats();renderTabla();
-  hide('loading');closeModal('modalEditar');editandoId=null;_guardandoEdicion=false;
+  hide('loading');closeModal('modalEditar');
+  editandoId=null;_guardandoEdicion=false;
+  const btnEdit=document.querySelector('#modalEditar .btn.primary');
+  if(btnEdit){btnEdit.disabled=false;btnEdit.innerHTML='<i class="ti ti-check"></i> Guardar cambios';}
 }
 
 // --- APROBACIONES -----------------------------------------
