@@ -495,7 +495,10 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let currentPerfil = null;
 let pagos = [];
-let priorizados = new Set();
+let priorizados = (()=>{
+  try{const s=JSON.parse(localStorage.getItem('gp_priorizados')||'[]');return new Set(s);}
+  catch(e){return new Set();}
+})();
 let aprobacionesMap = {}; // {pago_id: [{perfil_id, rol, estado}]} // IDs de pagos seleccionados para priorizar
 let empresas = [];
 let proyectos = [];
@@ -575,9 +578,14 @@ async function iniciarApp(user) {
 // ===
 // AUTH
 // ===
+function guardarPriorizados(){
+  try{localStorage.setItem('gp_priorizados',JSON.stringify([...priorizados]));}catch(e){}
+}
+
 function togglePriorizado(id, checked){
   if(checked) priorizados.add(id);
   else priorizados.delete(id);
+  guardarPriorizados();
   actualizarBarraPriorizados();
   // resaltar fila
   const row=document.getElementById(`row-${id}`);
@@ -595,6 +603,7 @@ function toggleTodos(checked){
     const row=document.getElementById(`row-${id}`);
     if(row) row.style.background=checked?'#EFF6FF':'';
   });
+  guardarPriorizados();
   actualizarBarraPriorizados();
 }
 
@@ -630,6 +639,7 @@ function filtrarPriorizados(){
 
 function limpiarPriorizados(){
   priorizados.clear();
+  guardarPriorizados();
   document.getElementById('fila-priorizados').style.display='none';
   const chkAll=document.getElementById('chk-all');
   if(chkAll) chkAll.checked=false;
