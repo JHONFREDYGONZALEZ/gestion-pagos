@@ -992,6 +992,13 @@ function renderTabla() {
   const puedeEditar  = ['pagador','admin'].includes(currentPerfil?.rol);
   const puedeEliminar= ['pagador','gerencia','admin'].includes(currentPerfil?.rol);
 
+  // Ordenar de más reciente a más antiguo
+  fil.sort((a,b)=>{
+    const fa=a.fecha_creacion||a.created_at||'';
+    const fb=b.fecha_creacion||b.created_at||'';
+    return fb.localeCompare(fa);
+  });
+
   document.getElementById('tbody').innerHTML = fil.map(p => `<tr id="row-${p.id}" ${priorizados.has(p.id)?'style="background:#EFF6FF;"':''}>
     <td><input type="checkbox" onchange="togglePriorizado(${p.id},this.checked)" ${priorizados.has(p.id)?'checked':''}></td>
     <td><strong>${p.num_egreso||'—'}</strong></td>
@@ -1085,17 +1092,29 @@ async function confirmarGuardarPago(){
 }
 
 async function insertarPago(obj){
-  show('loading');
-  const { data, error } = await sb.from('pagos').insert(obj).select('id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario').single();
-  if(error){hide('loading');alert('Error al guardar: '+error.message);return;}
-  // Agregar inmediatamente en memoria
-  if(data){
-    const emp=empresas.find(e=>e.id===data.empresa_id);
-    const proy=proyectos.find(p=>p.id===data.proyecto_id);
-    pagos.unshift({...data, empresaNombre:emp?.nombre||'', proyectoNombre:proy?.nombre||''});
-  }
+  // Agregar en memoria inmediatamente y cerrar modal sin esperar Supabase
+  const emp=empresas.find(e=>e.id==obj.empresa_id);
+  const proy=proyectos.find(p=>p.id==obj.proyecto_id);
+  const nuevoLocal={
+    ...obj,
+    id: Date.now(),
+    fecha_creacion: new Date().toISOString().split('T')[0],
+    empresaNombre: emp?.nombre||'',
+    proyectoNombre: proy?.nombre||'',
+  };
+  pagos.unshift(nuevoLocal);
   renderStats();renderTabla();actualizarSelectEmpresas();
-  hide('loading');closeModal('modalNuevo');
+  closeModal('modalNuevo');
+
+  // Insertar en Supabase en segundo plano
+  const { error } = await sb.from('pagos').insert(obj);
+  if(error){
+    // Si falla, quitar el registro temporal de memoria
+    const idx=pagos.findIndex(p=>p.id===nuevoLocal.id);
+    if(idx>=0) pagos.splice(idx,1);
+    renderStats();renderTabla();
+    alert('Error al guardar: '+error.message);
+  }
 }
 
 async function eliminarPago(id){
