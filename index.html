@@ -1059,6 +1059,10 @@ function openNuevo(){
   const ft=document.getElementById('f-tipo'); if(ft) ft.value='';
   const fv=document.getElementById('f-valor'); if(fv) fv.value='';
   document.getElementById('f-idtercero-hint').style.display='none';
+  // Resetear empresa y proyecto
+  const fe=document.getElementById('f-empresa'); if(fe) fe.value='';
+  const fp=document.getElementById('f-proyecto');
+  if(fp){fp.disabled=true;fp.innerHTML='<option value="">Primero seleccione pagador</option>';}
   openModal('modalNuevo');
 }
 
@@ -1193,11 +1197,14 @@ async function guardarEdicion(){
   const p=pagos.find(x=>x.id===editandoId);if(!p)return;
   _guardandoEdicion=true;
 
-  // Deshabilitar botón para evitar doble clic
   const btnEdit=document.querySelector('#modalEditar .btn.primary');
   if(btnEdit){btnEdit.disabled=true;btnEdit.textContent='Guardando...';}
 
-  // num_egreso siempre editable
+  const resetBtn=()=>{
+    _guardandoEdicion=false;
+    if(btnEdit){btnEdit.disabled=false;btnEdit.innerHTML='<i class="ti ti-check"></i> Guardar cambios';}
+  };
+
   const updates={
     cod_bancolombia:g('e-bancolombia')||null,
     fecha_pago:g('e-fechapago')||null,
@@ -1215,26 +1222,29 @@ async function guardarEdicion(){
     const nombre_pago=capitalizar(g('e-nombrepago'));
     const tipo=g('e-tipo');
     if(![empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo].every(Boolean)||!valor){
-      _guardandoEdicion=false;alert('Completa todos los campos obligatorios.');return;
+      resetBtn();alert('Completa todos los campos obligatorios.');return;
     }
     Object.assign(updates,{empresa_id:parseInt(empresa_id),proyecto_id:parseInt(proyecto_id),
       concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
       comentario:capitalizarFrase(g('e-comentario'))||null});
   }
 
-  show('loading');
-  await sb.from('pagos').update(updates).eq('id',editandoId);
+  try{
+    const {error}=await sb.from('pagos').update(updates).eq('id',editandoId);
+    if(error){resetBtn();alert('Error al guardar: '+error.message);return;}
 
-  // Actualizar en memoria inmediatamente sin recargar todo
-  Object.assign(p, updates);
-  if(updates.empresa_id){const emp=empresas.find(e=>e.id===updates.empresa_id);if(emp)p.empresaNombre=emp.nombre;}
-  if(updates.proyecto_id){const proy=proyectos.find(pr=>pr.id===updates.proyecto_id);if(proy)p.proyectoNombre=proy.nombre;}
+    // Actualizar en memoria
+    Object.assign(p, updates);
+    if(updates.empresa_id){const emp=empresas.find(e=>e.id===updates.empresa_id);if(emp)p.empresaNombre=emp.nombre;}
+    if(updates.proyecto_id){const proy=proyectos.find(pr=>pr.id===updates.proyecto_id);if(proy)p.proyectoNombre=proy.nombre;}
 
-  renderStats();renderTabla();
-  hide('loading');closeModal('modalEditar');
-  editandoId=null;_guardandoEdicion=false;
-  const btnEditClose=document.querySelector('#modalEditar .btn.primary');
-  if(btnEditClose){btnEditClose.disabled=false;btnEditClose.innerHTML='<i class="ti ti-check"></i> Guardar cambios';}
+    renderStats();renderTabla();
+    closeModal('modalEditar');
+    editandoId=null;
+    resetBtn();
+  }catch(e){
+    resetBtn();alert('Error inesperado: '+e.message);
+  }
 }
 
 // --- APROBACIONES -----------------------------------------
