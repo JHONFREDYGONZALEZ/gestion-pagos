@@ -215,7 +215,13 @@
           <input type="text" placeholder="👤 Nombre..." id="filtroNombre" oninput="renderTabla();guardarFiltros()" style="width:160px;">
           <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:160px;">
             <option value="">Todos los estados</option>
-            <option>Pendiente</option><option>Pagada</option>
+            <option value="Pendiente">Sin aprobar</option>
+            <option value="Pagada">Aprobado / Pagado</option>
+          </select>
+          <select id="filtroAprobacion" onchange="renderTabla();guardarFiltros()" style="width:180px;">
+            <option value="">Todas las aprobaciones</option>
+            <option value="con">Con aprobación profesional</option>
+            <option value="sin">Sin aprobación profesional</option>
           </select>
           <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
             <option value="">Todos los pagadores</option>
@@ -499,6 +505,7 @@ let priorizados = (()=>{
   try{const s=JSON.parse(localStorage.getItem('gp_priorizados')||'[]');return new Set(s);}
   catch(e){return new Set();}
 })();
+let _verSoloPriorizados = false;
 let aprobacionesMap = {}; // {pago_id: [{perfil_id, rol, estado}]} // IDs de pagos seleccionados para priorizar
 let empresas = [];
 let proyectos = [];
@@ -622,24 +629,15 @@ function actualizarBarraPriorizados(){
 }
 
 function filtrarPriorizados(){
-  // filtrar la tabla para mostrar solo los priorizados
-  const ids=[...priorizados];
-  document.getElementById('buscar').value='';
-  document.getElementById('filtroEstado').value='Pendiente';
+  _verSoloPriorizados = !_verSoloPriorizados;
+  const btn=document.querySelector('#fila-priorizados button[onclick="filtrarPriorizados()"]');
+  if(btn) btn.textContent=_verSoloPriorizados?'Ver todos':'Ver selección';
   renderTabla();
-  // filtrar manualmente en el tbody
-  const rows=document.querySelectorAll('#tbody tr');
-  rows.forEach(row=>{
-    const chk=row.querySelector('input[type=checkbox]');
-    if(chk){
-      const id=parseInt(chk.getAttribute('onchange').match(/\d+/)[0]);
-      row.style.display=ids.includes(id)?'':'none';
-    }
-  });
 }
 
 function limpiarPriorizados(){
   priorizados.clear();
+  _verSoloPriorizados=false;
   guardarPriorizados();
   document.getElementById('fila-priorizados').style.display='none';
   const chkAll=document.getElementById('chk-all');
@@ -943,6 +941,7 @@ function guardarFiltros(){
       filtroTipo:document.getElementById('filtroTipo')?.value||'',
       filtroFechaDesde:document.getElementById('filtroFechaDesde')?.value||'',
       filtroFechaHasta:document.getElementById('filtroFechaHasta')?.value||'',
+      filtroAprobacion:document.getElementById('filtroAprobacion')?.value||'',
     };
     localStorage.setItem('gp_filtros',JSON.stringify(f));
   }catch(e){}
@@ -961,6 +960,7 @@ function restaurarFiltros(){
     if(f.filtroTipo) document.getElementById('filtroTipo').value=f.filtroTipo;
     if(f.filtroFechaDesde) document.getElementById('filtroFechaDesde').value=f.filtroFechaDesde;
     if(f.filtroFechaHasta) document.getElementById('filtroFechaHasta').value=f.filtroFechaHasta;
+    if(f.filtroAprobacion) document.getElementById('filtroAprobacion').value=f.filtroAprobacion;
   }catch(e){}
 }
 
@@ -975,9 +975,11 @@ function renderTabla() {
   const ftipo = g('filtroTipo');
   const ffDesde = g('filtroFechaDesde');
   const ffHasta = g('filtroFechaHasta');
-  const hayFiltro = !!(q||fe||femp||fcod||fnombre||fproy||fconcepto||ftipo||ffDesde||ffHasta);
+  const fapro = g('filtroAprobacion');
+  const hayFiltro = !!(q||fe||femp||fcod||fnombre||fproy||fconcepto||ftipo||ffDesde||ffHasta||fapro);
 
   const fil = pagos.filter(p => {
+    if(_verSoloPriorizados && !priorizados.has(p.id)) return false;
     const campos = [p.num_egreso,p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.cod_bancolombia].map(v=>String(v||''));
     const m = !q || campos.some(v=>v.toLowerCase().includes(q));
     const mcod = !fcod || String(p.cod_bancolombia||'').toLowerCase().includes(fcod);
@@ -987,7 +989,9 @@ function renderTabla() {
     const mtipo = !ftipo || p.tipo===ftipo;
     const mfDesde = !ffDesde || (p.fecha_pago && p.fecha_pago>=ffDesde);
     const mfHasta = !ffHasta || (p.fecha_pago && p.fecha_pago<=ffHasta);
-    return m&&mcod&&mnombre&&mproy&&mconcepto&&mtipo&&mfDesde&&mfHasta&&(!fe||p.estado===fe)&&(!femp||String(p.empresa_id)==femp);
+    const tieneApro = (aprobacionesMap[p.id]||[]).length > 0;
+    const mapro = !fapro || (fapro==='con' ? tieneApro : !tieneApro);
+    return m&&mcod&&mnombre&&mproy&&mconcepto&&mtipo&&mfDesde&&mfHasta&&(!fe||p.estado===fe)&&(!femp||String(p.empresa_id)==femp)&&mapro;
   });
 
   document.getElementById('empty').style.display = fil.length?'none':'block';
@@ -1110,31 +1114,25 @@ async function insertarPago(obj){
   if(_insertando) return;
   _insertando = true;
 
-  // Deshabilitar botón para evitar doble clic
-  const btnGuardar=document.querySelector('#modalNuevo .btn.primary');
-  if(btnGuardar){btnGuardar.disabled=true;btnGuardar.textContent='Guardando...';}
-
-  const { error } = await sb.from('pagos').insert(obj);
-
-  // Rehabilitar botón
-  if(btnGuardar){btnGuardar.disabled=false;btnGuardar.innerHTML='<i class="ti ti-check"></i> Guardar pago';}
-  _insertando = false;
-
-  if(error){alert('Error al guardar: '+error.message);return;}
-
-  // Agregar en memoria con ID temporal
+  // Agregar en memoria y cerrar modal INMEDIATAMENTE
   const emp=empresas.find(e=>e.id==obj.empresa_id);
   const proy=proyectos.find(p=>p.id==obj.proyecto_id);
+  const tempId = Date.now();
   pagos.unshift({
     ...obj,
-    id: Date.now(),
+    id: tempId,
     fecha_creacion: new Date().toISOString().split('T')[0],
     empresaNombre: emp?.nombre||'',
     proyectoNombre: proy?.nombre||'',
   });
-
   renderStats();renderTabla();actualizarSelectEmpresas();
   closeModal('modalNuevo');
+  _insertando = false;
+
+  // Guardar en Supabase en segundo plano sin bloquear
+  sb.from('pagos').insert(obj).then(({error})=>{
+    if(error) console.error('Error guardando pago:',error.message);
+  });
 }
 
 async function eliminarPago(id){
@@ -1143,11 +1141,20 @@ async function eliminarPago(id){
   if(p.estado==='Pagada'){alert('No se puede eliminar un pago ya Pagado.');return;}
   const ok=window.confirm('¿Confirma que desea eliminar este pago? Esta acción no se puede deshacer.');
   if(!ok)return;
-  show('loading');
-  const {error}=await sb.from('pagos').delete().eq('id',id);
-  if(error){hide('loading');alert('Error al eliminar: '+error.message);return;}
-  await cargarPagos();renderStats();renderTabla();
-  hide('loading');
+
+  // Eliminar de memoria inmediatamente
+  const idx=pagos.findIndex(x=>x.id===id);
+  if(idx>=0) pagos.splice(idx,1);
+  renderStats();renderTabla();
+
+  // Eliminar en Supabase en segundo plano
+  sb.from('pagos').delete().eq('id',id).then(({error})=>{
+    if(error){
+      // Si falla, restaurar el pago en memoria
+      console.error('Error eliminando:',error.message);
+      alert('Error al eliminar: '+error.message);
+    }
+  });
 }
 
 // --- EDITAR -----------------------------------------------
@@ -1197,14 +1204,6 @@ async function guardarEdicion(){
   const p=pagos.find(x=>x.id===editandoId);if(!p)return;
   _guardandoEdicion=true;
 
-  const btnEdit=document.querySelector('#modalEditar .btn.primary');
-  if(btnEdit){btnEdit.disabled=true;btnEdit.textContent='Guardando...';}
-
-  const resetBtn=()=>{
-    _guardandoEdicion=false;
-    if(btnEdit){btnEdit.disabled=false;btnEdit.innerHTML='<i class="ti ti-check"></i> Guardar cambios';}
-  };
-
   const updates={
     cod_bancolombia:g('e-bancolombia')||null,
     fecha_pago:g('e-fechapago')||null,
@@ -1222,29 +1221,27 @@ async function guardarEdicion(){
     const nombre_pago=capitalizar(g('e-nombrepago'));
     const tipo=g('e-tipo');
     if(![empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo].every(Boolean)||!valor){
-      resetBtn();alert('Completa todos los campos obligatorios.');return;
+      _guardandoEdicion=false;alert('Completa todos los campos obligatorios.');return;
     }
     Object.assign(updates,{empresa_id:parseInt(empresa_id),proyecto_id:parseInt(proyecto_id),
       concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
       comentario:capitalizarFrase(g('e-comentario'))||null});
   }
 
-  try{
-    const {error}=await sb.from('pagos').update(updates).eq('id',editandoId);
-    if(error){resetBtn();alert('Error al guardar: '+error.message);return;}
+  // Actualizar en memoria INMEDIATAMENTE y cerrar modal
+  Object.assign(p, updates);
+  if(updates.empresa_id){const emp=empresas.find(e=>e.id===updates.empresa_id);if(emp)p.empresaNombre=emp.nombre;}
+  if(updates.proyecto_id){const proy=proyectos.find(pr=>pr.id===updates.proyecto_id);if(proy)p.proyectoNombre=proy.nombre;}
 
-    // Actualizar en memoria
-    Object.assign(p, updates);
-    if(updates.empresa_id){const emp=empresas.find(e=>e.id===updates.empresa_id);if(emp)p.empresaNombre=emp.nombre;}
-    if(updates.proyecto_id){const proy=proyectos.find(pr=>pr.id===updates.proyecto_id);if(proy)p.proyectoNombre=proy.nombre;}
+  renderStats();renderTabla();
+  closeModal('modalEditar');
+  editandoId=null;_guardandoEdicion=false;
 
-    renderStats();renderTabla();
-    closeModal('modalEditar');
-    editandoId=null;
-    resetBtn();
-  }catch(e){
-    resetBtn();alert('Error inesperado: '+e.message);
-  }
+  // Guardar en Supabase en segundo plano
+  const idEditar=p.id;
+  sb.from('pagos').update(updates).eq('id',idEditar).then(({error})=>{
+    if(error) console.error('Error actualizando pago:',error.message);
+  });
 }
 
 // --- APROBACIONES -----------------------------------------
@@ -1299,35 +1296,43 @@ async function abrirAprobacion(id){
 
 async function aprobar(pagoId, perfilId, rol){
   const p=pagos.find(x=>x.id===pagoId);if(!p)return;
-  show('loading');
 
-  // Verificar si ya existe una aprobacion de este usuario para este pago
-  const {data:existente}=await sb.from('aprobaciones')
-    .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1);
+  // Feedback visual en el botón
+  const btnApro=document.querySelector(`button[onclick="aprobar(${pagoId},'${perfilId}','${rol}')"]`);
+  if(btnApro){btnApro.disabled=true;btnApro.textContent='...';}
 
-  const fechaAhora = new Date().toISOString();
+  const fechaAhora=new Date().toISOString();
 
-  if(existente&&existente.length>0){
-    await sb.from('aprobaciones').update({
-      estado:'aprobado', fecha:fechaAhora, rol
-    }).eq('id',existente[0].id);
-  } else {
-    await sb.from('aprobaciones').insert({
-      pago_id:pagoId, perfil_id:perfilId, rol, estado:'aprobado', fecha:fechaAhora
-    });
-  }
+  // Actualizar aprobacionesMap en memoria inmediatamente
+  if(!aprobacionesMap[pagoId]) aprobacionesMap[pagoId]=[];
+  const existing=aprobacionesMap[pagoId].find(a=>a.perfil_id===perfilId);
+  if(existing){existing.estado='aprobado';existing.fecha=fechaAhora;}
+  else aprobacionesMap[pagoId].push({perfil_id:perfilId,rol,estado:'aprobado',fecha:fechaAhora});
 
-  // si es gerencia → marcar como Pagada
+  // Si es gerencia → marcar Pagada en memoria
   if(rol==='gerencia'){
-    await sb.from('pagos').update({estado:'Pagada',fecha_pago:new Date().toISOString().split('T')[0]}).eq('id',pagoId);
-    const pLocal=pagos.find(x=>x.id===pagoId);
-    if(pLocal){pLocal.estado='Pagada';pLocal.fecha_pago=new Date().toISOString().split('T')[0];}
+    p.estado='Pagada';
+    p.fecha_pago=new Date().toISOString().split('T')[0];
   }
 
   renderStats();renderTabla();
-  hide('loading');
-  await cargarAprobaciones();
-  await abrirAprobacion(pagoId);
+  await abrirAprobacion(pagoId); // refrescar modal con estado nuevo
+
+  // Guardar en Supabase en segundo plano
+  (async()=>{
+    try{
+      const {data:existente}=await sb.from('aprobaciones')
+        .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1);
+      if(existente&&existente.length>0){
+        await sb.from('aprobaciones').update({estado:'aprobado',fecha:fechaAhora,rol}).eq('id',existente[0].id);
+      } else {
+        await sb.from('aprobaciones').insert({pago_id:pagoId,perfil_id:perfilId,rol,estado:'aprobado',fecha:fechaAhora});
+      }
+      if(rol==='gerencia'){
+        await sb.from('pagos').update({estado:'Pagada',fecha_pago:p.fecha_pago}).eq('id',pagoId);
+      }
+    }catch(e){console.error('Error aprobando:',e.message);}
+  })();
 }
 
 // ===
