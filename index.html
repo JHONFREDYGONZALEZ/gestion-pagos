@@ -747,18 +747,46 @@ async function cargarUsuarios() {
         <div>
           <div style="font-weight:600;">${u.nombre}</div>
           <div style="font-size:12px;color:var(--text3);">${u.email}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">Contraseña: <span style="font-family:monospace;background:var(--bg2);padding:1px 6px;border-radius:4px;">••••••••</span>
+            <button onclick="resetearClave('${u.id}','${u.email}')" style="background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;margin-left:4px;">Cambiar</button>
+          </div>
         </div>
         <span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:${colores[u.rol]||'#ccc'}22;color:${colores[u.rol]||'#666'};">${u.rol}</span>
       </div>
-      <div style="display:flex;gap:6px;">
-        <select onchange="cambiarRol('${u.id}',this.value)" style="flex:1;font-size:12px;padding:4px;">
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <select onchange="cambiarRol('${u.id}',this.value)" style="flex:1;font-size:12px;padding:4px;min-width:100px;">
           ${['pagador','profesional','gerencia','admin'].map(r=>`<option value="${r}"${r===u.rol?' selected':''}>${r}</option>`).join('')}
         </select>
         <button class="btn-sm" onclick="toggleActivo('${u.id}',${u.activo})" style="color:${u.activo?'var(--danger)':'var(--accent2)'};">
           ${u.activo?'Desactivar':'Activar'}
         </button>
+        ${u.id!==currentUser?.id?`<button class="btn-sm" onclick="eliminarUsuario('${u.id}','${u.nombre}')" style="color:var(--danger);border-color:var(--danger);">🗑 Eliminar</button>`:''}
       </div>
     </div>`).join('');
+}
+
+async function resetearClave(userId, email){
+  const nueva = prompt(`Nueva contraseña para ${email}:\n(mínimo 6 caracteres)`);
+  if(!nueva||nueva.length<6){alert('Contraseña muy corta o cancelado.');return;}
+  const r=await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`,{
+    method:'PUT',
+    headers:{'apikey':SUPABASE_SERVICE_KEY,'Authorization':`Bearer ${SUPABASE_SERVICE_KEY}`,'Content-Type':'application/json'},
+    body:JSON.stringify({password:nueva})
+  });
+  if(r.ok) alert(`✓ Contraseña de ${email} actualizada a: ${nueva}`);
+  else alert('Error al cambiar contraseña.');
+}
+
+async function eliminarUsuario(userId, nombre){
+  if(!confirm(`¿Eliminar al usuario "${nombre}"? Esta acción no se puede deshacer.`)) return;
+  // Eliminar perfil
+  await sb.from('perfiles').delete().eq('id',userId);
+  // Eliminar de auth via Admin API
+  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`,{
+    method:'DELETE',
+    headers:{'apikey':SUPABASE_SERVICE_KEY,'Authorization':`Bearer ${SUPABASE_SERVICE_KEY}`}
+  });
+  cargarUsuarios();
 }
 
 async function cambiarRol(id, rol) {
