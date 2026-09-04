@@ -997,6 +997,8 @@ function limpiarTodosFiltros(){
   actualizarSelectEmpresas();
   renderTabla();
 }
+
+function renderTabla() {
   const q = document.getElementById('buscar').value.toLowerCase();
   const fe = g('filtroEstado');
   const femp = g('filtroEmpresa');
