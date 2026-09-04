@@ -577,7 +577,8 @@ async function iniciarApp(user) {
   }
   renderStats();
   actualizarSelectEmpresas();
-  restaurarFiltros();
+  // No restaurar filtros al inicio — siempre empezar limpio
+  try{localStorage.removeItem('gp_filtros');}catch(e){}
   inicializarFechasPorDefecto();
   renderHeaders();
   renderTabla();
