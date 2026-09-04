@@ -1147,6 +1147,10 @@ function openNuevo(){
   openModal('modalNuevo');
 }
 
+function fechaLocal(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 async function guardarPago(){
   const empresa_id = g('f-empresa');
   const proyecto_id = g('f-proyecto');
@@ -1166,7 +1170,7 @@ async function guardarPago(){
   if(duplicado){
     _pagoPendienteGuardar={empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
       num_egreso:g('f-egreso')||null,cod_bancolombia:g('f-bancolombia')||null,
-      comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',
+      comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',fecha_creacion:fechaLocal(),
       creado_por:currentUser.id};
     document.getElementById('dup-egreso').textContent=duplicado.num_egreso||'—';
     document.getElementById('dup-fecha').textContent=fmtDate(duplicado.fecha_creacion);
@@ -1177,7 +1181,7 @@ async function guardarPago(){
   }
   await insertarPago({empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
     num_egreso:g('f-egreso')||null,cod_bancolombia:g('f-bancolombia')||null,
-    comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',creado_por:currentUser.id});
+    comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',fecha_creacion:fechaLocal(),creado_por:currentUser.id});
 }
 
 async function confirmarGuardarPago(){
@@ -1194,7 +1198,9 @@ async function insertarPago(obj){
   // Agregar en memoria y cerrar modal INMEDIATAMENTE
   const emp=empresas.find(e=>e.id==obj.empresa_id);
   const proy=proyectos.find(p=>p.id==obj.proyecto_id);
-  const hoy = new Date().toISOString().split('T')[0];
+  // Usar fecha local (Colombia UTC-5), no UTC
+  const ahora = new Date();
+  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}-${String(ahora.getDate()).padStart(2,'0')}`;
   const tempId = Date.now();
   pagos.unshift({
     ...obj,
