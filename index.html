@@ -414,12 +414,11 @@
 <!-- MODAL CATÁLOGO -->
 <div class="modal-bg" id="modalCatalogo">
   <div class="modal" style="max-width:720px;max-height:85vh;overflow-y:auto;">
-    <div class="modal-title"><i class="ti ti-building"></i> Empresas y presupuestos</div>
-    <div id="catalogo-body"></div>
-    <div class="divider"></div>
-    <div style="display:flex;justify-content:flex-end;">
-      <button class="btn" onclick="closeModal('modalCatalogo')">Cerrar</button>
+    <div class="modal-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span><i class="ti ti-building"></i> Empresas y presupuestos</span>
+      <button onclick="closeModal('modalCatalogo')" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--text3);line-height:1;padding:0 4px;" title="Cerrar">✕</button>
     </div>
+    <div id="catalogo-body"></div>
   </div>
 </div>
 
@@ -2083,18 +2082,19 @@ function abrirCatalogo(){
 }
 
 let _catalogoEmpresaId = null;
+let _catalogoProyectoId = null;
 
 function renderCatalogo(){
   const body=document.getElementById('catalogo-body');
   if(!body) return;
 
   // Selector de empresa
-  const selectorHTML=`
-    <div style="margin-bottom:16px;">
-      <label style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:6px;">Seleccionar empresa</label>
+  const selectorEmpresa=`
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:8px;">1. Selecciona la empresa</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${empresas.map(e=>`
-          <button onclick="seleccionarEmpresaCatalogo(${e.id})" 
+          <button onclick="seleccionarEmpresaCatalogo(${e.id})"
             style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;
             border:2px solid ${_catalogoEmpresaId===e.id?'var(--accent)':'var(--border)'};
             background:${_catalogoEmpresaId===e.id?'var(--accent-light)':'var(--surface)'};
@@ -2102,54 +2102,81 @@ function renderCatalogo(){
             ${e.nombre}
           </button>`).join('')}
       </div>
-    </div>
-  `;
+    </div>`;
 
   if(!_catalogoEmpresaId){
-    body.innerHTML=selectorHTML+`<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px;">Selecciona una empresa para ver sus proyectos y presupuestos.</div>`;
+    body.innerHTML=selectorEmpresa+`<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px;background:var(--bg2);border-radius:var(--radius);">Selecciona una empresa para continuar.</div>`;
     return;
   }
 
   const emp=empresas.find(e=>e.id===_catalogoEmpresaId);
   if(!emp) return;
-  const proys=proyectos.filter(p=>p.empresa_id===emp.id);
+  const proys=proyectos.filter(p=>p.empresa_id===emp.id).sort((a,b)=>a.nombre.localeCompare(b.nombre));
 
-  body.innerHTML=selectorHTML+`
-    ${proys.map(p=>`
-      <div style="border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;">
-        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 12px;background:var(--bg2);">
-          <span style="font-size:13px;font-weight:600;">${p.nombre}</span>
-          <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-            <label style="color:var(--text3);">Presup. total:</label>
-            <span id="pres-total-${p.id}" style="font-weight:600;color:var(--accent);font-size:13px;">${p.presupuesto>0?new Intl.NumberFormat('es-CO').format(p.presupuesto):'$0'}</span>
-          </div>
-        </div>
-        <div style="padding:8px 12px;">
-          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">Presupuesto por concepto</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;">
-            ${GP_CONCEPTOS.map(co=>{
-              const pc=presupuestos.find(x=>x.proyecto_id===p.id&&x.concepto===co);
-              return `<div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-                <span style="flex:1;color:var(--text2);">${co}</span>
-                <input type="text" value="${pc&&pc.presupuesto>0?new Intl.NumberFormat('es-CO').format(pc.presupuesto):''}"
-                  placeholder="0" inputmode="numeric"
-                  oninput="this.value=this.value.replace(/[^0-9]/g,'')" onblur="if(this.value)this.value=new Intl.NumberFormat('es-CO').format(parseInt(this.value)||0)" onfocus="this.value=this.value.replace(/\./g,'')"
-                  onchange="guardarPresupuestoConcepto(${p.id},'${co}',this.value,${emp.id})"
-                  style="width:110px;font-size:11px;text-align:right;padding:3px 7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
-              </div>`;
-            }).join('')}
-          </div>
-        </div>
-      </div>`).join('')}
-    <div style="display:flex;gap:8px;margin-top:10px;">
-      <input type="text" id="np-${emp.id}" placeholder="Nombre del nuevo proyecto..." style="flex:1;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);">
-      <button class="btn-sm approve" onclick="agregarProyectoCloud(${emp.id},'${emp.nombre}')"><i class="ti ti-plus"></i> Agregar</button>
-    </div>
-  `;
+  // Selector de proyecto
+  const selectorProyecto=`
+    <div style="margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;margin-bottom:8px;">2. Selecciona el proyecto</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${proys.map(p=>`
+          <button onclick="seleccionarProyectoCatalogo(${p.id})"
+            style="padding:6px 14px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;
+            border:2px solid ${_catalogoProyectoId===p.id?'#1D9E75':'var(--border)'};
+            background:${_catalogoProyectoId===p.id?'#EAF3DE':'var(--surface)'};
+            color:${_catalogoProyectoId===p.id?'#1D9E75':'var(--text2)'};">
+            ${p.nombre}
+          </button>`).join('')}
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <input type="text" id="np-${emp.id}" placeholder="Agregar nuevo proyecto..." style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);">
+        <button class="btn-sm approve" onclick="agregarProyectoCloud(${emp.id},'${emp.nombre}')"><i class="ti ti-plus"></i> Agregar</button>
+      </div>
+    </div>`;
+
+  if(!_catalogoProyectoId){
+    body.innerHTML=selectorEmpresa+selectorProyecto+`<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px;background:var(--bg2);border-radius:var(--radius);">Selecciona un proyecto para ver sus conceptos.</div>`;
+    return;
+  }
+
+  const proy=proyectos.find(p=>p.id===_catalogoProyectoId);
+  if(!proy){_catalogoProyectoId=null;renderCatalogo();return;}
+
+  const totalPres=presupuestos.filter(x=>x.proyecto_id===proy.id).reduce((s,x)=>s+x.presupuesto,0);
+
+  const conceptosHTML=`
+    <div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;">3. Presupuesto por concepto — <strong style="color:var(--accent);">${proy.nombre}</strong></div>
+        <div style="font-size:13px;font-weight:700;color:var(--accent);">Total: <span id="pres-total-${proy.id}">${new Intl.NumberFormat('es-CO').format(totalPres)}</span></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px;">
+        ${GP_CONCEPTOS.map(co=>{
+          const pc=presupuestos.find(x=>x.proyecto_id===proy.id&&x.concepto===co);
+          return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border2);">
+            <span style="flex:1;font-size:13px;color:var(--text2);">${co}</span>
+            <input type="text" value="${pc&&pc.presupuesto>0?new Intl.NumberFormat('es-CO').format(pc.presupuesto):''}"
+              placeholder="0" inputmode="numeric"
+              oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+              onblur="if(this.value)this.value=new Intl.NumberFormat('es-CO').format(parseInt(this.value)||0)"
+              onfocus="this.value=this.value.replace(/\./g,'')"
+              onchange="guardarPresupuestoConcepto(${proy.id},'${co}',this.value,${emp.id})"
+              style="width:120px;font-size:12px;text-align:right;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+
+  body.innerHTML=selectorEmpresa+selectorProyecto+conceptosHTML;
 }
 
 function seleccionarEmpresaCatalogo(empId){
-  _catalogoEmpresaId = empId;
+  _catalogoEmpresaId=empId;
+  _catalogoProyectoId=null;
+  renderCatalogo();
+}
+
+function seleccionarProyectoCatalogo(proyId){
+  _catalogoProyectoId=proyId;
   renderCatalogo();
 }
 async function guardarPresupuestoTotal(proyId, val){
