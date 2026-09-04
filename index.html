@@ -270,13 +270,8 @@
 
         <div class="tbl-wrap">
           <table>
-            <thead><tr>
+            <thead id="thead-drag"><tr id="tr-headers">
               <th style="width:36px;"><input type="checkbox" id="chk-all" onchange="toggleTodos(this.checked)" title="Seleccionar todos"></th>
-              <th>No. egreso</th><th>Fecha creación</th><th>Pagador</th><th>Proyecto</th>
-              <th>Concepto</th><th>Id tercero</th><th>Nombre tercero</th>
-              <th>Nombre a quien se pagó</th><th>Tipo de pago</th><th>Valor</th>
-              <th>Fecha de pago</th><th>Cód Banco</th><th>Estado</th>
-              <th>Comentario</th><th>Acciones</th>
             </tr></thead>
             <tbody id="tbody"></tbody>
           </table>
@@ -506,7 +501,8 @@ let priorizados = (()=>{
   catch(e){return new Set();}
 })();
 let _verSoloPriorizados = false;
-let aprobacionesMap = {}; // {pago_id: [{perfil_id, rol, estado}]} // IDs de pagos seleccionados para priorizar
+let aprobacionesMap = {};
+let _aprobacionesCargadas = false; // IDs de pagos seleccionados para priorizar
 let empresas = [];
 let proyectos = [];
 let presupuestos = [];
@@ -578,6 +574,8 @@ async function iniciarApp(user) {
   renderStats();
   actualizarSelectEmpresas();
   restaurarFiltros();
+  inicializarFechasPorDefecto();
+  renderHeaders();
   renderTabla();
   hide('loading');
   show('app-screen');
@@ -804,6 +802,7 @@ async function cargarAprobaciones(){
     if(!aprobacionesMap[a.pago_id]) aprobacionesMap[a.pago_id]=[];
     aprobacionesMap[a.pago_id].push(a);
   });
+  _aprobacionesCargadas=true;
   renderTabla();
 }
 
@@ -859,6 +858,24 @@ function normalizarConcepto(raw){
   if(s.includes('alq')||s.includes('maq'))   return 'Alq Maq';
   if(s.includes('apoyo')||s.includes('admin')||s.includes('oficina')) return 'Apoyo Admtivo';
   if(s.includes('legal'))                    return 'Gastos Legales';
+  return raw.trim();
+}
+
+function normalizarTipo(raw){
+  if(!raw)return'';
+  const s=raw.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  // PSE y variantes → Prov PSE
+  if(s==='pse'||s.includes('prov pse')||s.includes('pse')) return 'Prov PSE';
+  // Transferencia y variantes → Prov Tranferencia
+  if(s.includes('transf')||s.includes('prov tran')) return 'Prov Tranferencia';
+  if(s.includes('anticipo'))  return 'Anticipo';
+  if(s.includes('prestamo')||s.includes('préstamo')) return 'Préstamo';
+  if(s.includes('viatico'))   return 'Viáticos';
+  if(s.includes('reembolso')) return 'Reembolso';
+  if(s.includes('nomin'))     return 'Nomina';
+  if(s.includes('credito')||s.includes('crédito')) return 'Crédito';
+  if(s.includes('provision')||s.includes('provisión')) return 'Provisión';
+  if(s.includes('caja'))      return 'Caja';
   return raw.trim();
 }
 function badgeHTML(estado) {
@@ -947,7 +964,21 @@ function guardarFiltros(){
   }catch(e){}
 }
 
-function restaurarFiltros(){
+function inicializarFechasPorDefecto(){
+  const desde=document.getElementById('filtroFechaDesde');
+  const hasta=document.getElementById('filtroFechaHasta');
+  if(!desde||!hasta)return;
+  // Solo poner por defecto si no hay valores guardados
+  if(!desde.value){
+    // Fecha del registro más antiguo con fecha_pago
+    const fechas=pagos.map(p=>p.fecha_pago||p.fecha_creacion).filter(Boolean).sort();
+    if(fechas.length) desde.value=fechas[0];
+  }
+  if(!hasta.value){
+    // Fecha de hoy
+    hasta.value=new Date().toISOString().split('T')[0];
+  }
+}
   try{
     const f=JSON.parse(localStorage.getItem('gp_filtros')||'{}');
     if(f.buscar) document.getElementById('buscar').value=f.buscar;
@@ -986,7 +1017,7 @@ function renderTabla() {
     const mnombre = !fnombre || [p.nombre_tercero,p.nombre_pago].map(v=>String(v||'').toLowerCase()).some(v=>v.includes(fnombre));
     const mproy = !fproy || String(p.proyecto_id)==fproy;
     const mconcepto = !fconcepto || normalizarConcepto(p.concepto||'')===fconcepto;
-    const mtipo = !ftipo || p.tipo===ftipo;
+    const mtipo = !ftipo || normalizarTipo(p.tipo||'')===ftipo;
     const mfDesde = !ffDesde || (p.fecha_pago && p.fecha_pago>=ffDesde);
     const mfHasta = !ffHasta || (p.fecha_pago && p.fecha_pago<=ffHasta);
     const tieneApro = (aprobacionesMap[p.id]||[]).length > 0;
@@ -1014,24 +1045,33 @@ function renderTabla() {
     return fb.localeCompare(fa);
   });
 
+  const colsActuales = getColsSorted();
+
+  const renderCell=(p,key)=>{
+    switch(key){
+      case 'num_egreso':      return `<td><strong>${p.num_egreso||'—'}</strong></td>`;
+      case 'fecha_creacion':  return `<td>${fmtDate(p.fecha_creacion)}</td>`;
+      case 'empresaNombre':   return `<td class="trunc" style="max-width:100px;" title="${p.empresaNombre}">${p.empresaNombre||'—'}</td>`;
+      case 'proyectoNombre':  return `<td class="trunc" style="max-width:100px;" title="${p.proyectoNombre}">${p.proyectoNombre||'—'}</td>`;
+      case 'concepto':        return `<td>${p.concepto||'—'}</td>`;
+      case 'id_tercero':      return `<td>${p.id_tercero||'—'}</td>`;
+      case 'nombre_tercero':  return `<td class="trunc" style="max-width:120px;" title="${p.nombre_tercero||''}">${p.nombre_tercero||'—'}</td>`;
+      case 'nombre_pago':     return `<td class="trunc" style="max-width:110px;" title="${p.nombre_pago||''}">${p.nombre_pago||'—'}</td>`;
+      case 'tipo':            return `<td>${p.tipo||'—'}</td>`;
+      case 'valor':           return `<td><strong>${fmt(p.valor)}</strong></td>`;
+      case 'fecha_pago':      return `<td>${fmtDate(p.fecha_pago)}</td>`;
+      case 'cod_bancolombia': return `<td>${codHTML(p.cod_bancolombia)}</td>`;
+      case 'estado':          return `<td>${badgeHTML(p.estado)}</td>`;
+      case 'comentario':      return `<td class="trunc" style="max-width:120px;" title="${p.comentario||''}">${p.comentario||'—'}</td>`;
+      default: return '<td>—</td>';
+    }
+  };
+
   document.getElementById('tbody').innerHTML = fil.map(p => `<tr id="row-${p.id}" ${priorizados.has(p.id)?'style="background:#EFF6FF;"':''}>
     <td><input type="checkbox" onchange="togglePriorizado(${p.id},this.checked)" ${priorizados.has(p.id)?'checked':''}></td>
-    <td><strong>${p.num_egreso||'—'}</strong></td>
-    <td>${fmtDate(p.fecha_creacion)}</td>
-    <td class="trunc" style="max-width:100px;" title="${p.empresaNombre}">${p.empresaNombre}</td>
-    <td class="trunc" style="max-width:100px;" title="${p.proyectoNombre}">${p.proyectoNombre}</td>
-    <td>${p.concepto||'—'}</td>
-    <td>${p.id_tercero||'—'}</td>
-    <td class="trunc" style="max-width:120px;" title="${p.nombre_tercero||''}">${p.nombre_tercero||'—'}</td>
-    <td class="trunc" style="max-width:110px;" title="${p.nombre_pago||''}">${p.nombre_pago||'—'}</td>
-    <td>${p.tipo||'—'}</td>
-    <td><strong>${fmt(p.valor)}</strong></td>
-    <td>${fmtDate(p.fecha_pago)}</td>
-    <td>${codHTML(p.cod_bancolombia)}</td>
-    <td>${badgeHTML(p.estado)}</td>
-    <td class="trunc" style="max-width:120px;" title="${p.comentario||''}">${p.comentario||'—'}</td>
+    ${colsActuales.map(col=>renderCell(p,col.key)).join('')}
     <td><div class="actions-cell">
-      ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="${p.estado==='Pagada'?'Aprobado':'Pendiente aprobación'}" style="border-color:${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'#27500A':'#D97706'};color:${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'#27500A':'#D97706'};background:${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'#EAF3DE':'#FEF3C7'};font-size:14px;padding:3px 7px;">${(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada')?'✓':'⏱'}</button>`:''}
+      ${puedeAprobar?`<button class="btn-sm" onclick="abrirAprobacion(${p.id})" title="${p.estado==='Pagada'?'Aprobado':'Pendiente aprobación'}" style="border-color:${(_aprobacionesCargadas&&(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada'))?'#27500A':'#D97706'};color:${(_aprobacionesCargadas&&(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada'))?'#27500A':'#D97706'};background:${(_aprobacionesCargadas&&(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada'))?'#EAF3DE':'#FEF3C7'};font-size:14px;padding:3px 7px;">${(_aprobacionesCargadas&&(aprobacionesMap[p.id]?.length>0||p.estado==='Pagada'))?'✓':'⏱'}</button>`:''}
       ${puedeEditar?`<button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar" style="border-color:#3B82F6;color:#3B82F6;background:#EFF6FF;font-size:13px;padding:3px 7px;">✏️</button>`:''}
       ${puedeEliminar?`<button class="btn-sm" onclick="eliminarPago(${p.id})" ${p.estado==='Pagada'?'disabled':''} title="Eliminar" style="${p.estado==='Pagada'?'opacity:.35;cursor:not-allowed;':'border-color:#E53E3E;color:#E53E3E;background:#FEF2F2;'}font-size:13px;padding:3px 7px;">🗑</button>`:''}
     </div></td>
@@ -1245,53 +1285,57 @@ async function guardarEdicion(){
 }
 
 // --- APROBACIONES -----------------------------------------
-async function abrirAprobacion(id){
+function abrirAprobacion(id){
   const p=pagos.find(x=>x.id===id);if(!p)return;
   aprobacionId=id;
   document.getElementById('apro-titulo').textContent=`— ${p.num_egreso||'sin número'} · ${p.nombre_tercero||''}`;
-
-  // cargar aprobaciones desde BD
-  const { data: apros } = await sb.from('aprobaciones').select('*,perfil:perfil_id(nombre,rol)').eq('pago_id',id);
-  const aprobaciones = apros||[];
-
-  // usuarios aprobadores — incluir pagador ya que ahora puede aprobar
-  const { data: aprobadores } = await sb.from('perfiles').select('*').in('rol',['pagador','profesional','gerencia']).eq('activo',true);
-
-  const puedoAprobar = ['pagador','profesional','gerencia','admin'].includes(currentPerfil?.rol);
-  const esAdmin = currentPerfil?.rol === 'admin';
-  const profAprobados = aprobaciones.filter(a=>a.estado==='aprobado'&&a.rol==='profesional').length;
-  const gerAprobado = aprobaciones.find(a=>a.estado==='aprobado'&&a.rol==='gerencia');
-
-  const rows=(aprobadores||[]).map(u=>{
-    const apro=aprobaciones.find(a=>a.perfil_id===u.id);
-    const esAprobado=apro?.estado==='aprobado';
-    const esMio=u.id===currentUser.id;
-    // Admin puede aprobar en nombre de cualquiera; otros solo en su propio nombre
-    const puedeAprobarEste = puedoAprobar && (esMio || esAdmin) && !esAprobado && p.estado!=='Pagada';
-    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border2);">
-      <div>
-        <div style="font-weight:600;font-size:13px;">${u.nombre}</div>
-        <div style="font-size:11px;color:var(--text3);text-transform:capitalize;">${u.rol}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;">
-        ${apro?.fecha?`<span style="font-size:11px;color:var(--text3);">${fmtDate(apro.fecha)}</span>`:''}
-        ${esAprobado
-          ? `<span style="color:var(--green);font-size:20px;"><i class="ti ti-circle-check"></i></span>`
-          : (puedeAprobarEste
-              ? `<button class="btn-sm approve" onclick="aprobar(${id},'${u.id}','${u.rol}')"><i class="ti ti-check"></i> Aprobar</button>`
-              : `<span style="color:var(--text3);font-size:18px;"><i class="ti ti-clock"></i></span>`)
-        }
-      </div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('apro-body').innerHTML=`
-    <div style="margin-bottom:10px;font-size:12px;color:var(--text2);">
-      Profesionales aprobados: ${profAprobados} | Gerencia: ${gerAprobado?'✓ Aprobado':'Pendiente'}
-    </div>
-    ${rows}
-  `;
+  document.getElementById('apro-body').innerHTML='<div style="padding:20px;text-align:center;color:var(--text3);">Cargando...</div>';
   openModal('modalAprobacion');
+
+  // Cargar datos en paralelo sin bloquear
+  Promise.all([
+    sb.from('aprobaciones').select('*,perfil:perfil_id(nombre,rol)').eq('pago_id',id),
+    sb.from('perfiles').select('*').in('rol',['pagador','profesional','gerencia']).eq('activo',true)
+  ]).then(([resApro, resPerfiles])=>{
+    const aprobaciones = resApro.data||[];
+    const aprobadores = resPerfiles.data||[];
+
+    const puedoAprobar = ['pagador','profesional','gerencia','admin'].includes(currentPerfil?.rol);
+    const esAdmin = currentPerfil?.rol === 'admin';
+    const profAprobados = aprobaciones.filter(a=>a.estado==='aprobado'&&a.rol!=='gerencia').length;
+    const gerAprobado = aprobaciones.find(a=>a.estado==='aprobado'&&a.rol==='gerencia');
+
+    const rows=aprobadores.map(u=>{
+      const apro=aprobaciones.find(a=>a.perfil_id===u.id);
+      const esAprobado=apro?.estado==='aprobado';
+      const esMio=u.id===currentUser.id;
+      const puedeAprobarEste = puedoAprobar && (esMio||esAdmin) && !esAprobado && p.estado!=='Pagada';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border2);">
+        <div>
+          <div style="font-weight:600;font-size:13px;">${u.nombre}</div>
+          <div style="font-size:11px;color:var(--text3);text-transform:capitalize;">${u.rol}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${apro?.fecha?`<span style="font-size:11px;color:var(--text3);">${fmtDate(apro.fecha)}</span>`:''}
+          ${esAprobado
+            ? `<span style="color:var(--green);font-size:20px;"><i class="ti ti-circle-check"></i></span>`
+            : (puedeAprobarEste
+                ? `<button class="btn-sm approve" onclick="aprobar(${id},'${u.id}','${u.rol}')"><i class="ti ti-check"></i> Aprobar</button>`
+                : `<span style="color:var(--text3);font-size:18px;"><i class="ti ti-clock"></i></span>`)
+          }
+        </div>
+      </div>`;
+    }).join('');
+
+    document.getElementById('apro-body').innerHTML=`
+      <div style="margin-bottom:10px;font-size:12px;color:var(--text2);">
+        Profesionales aprobados: ${profAprobados} | Gerencia: ${gerAprobado?'✓ Aprobado':'Pendiente'}
+      </div>
+      ${rows||'<div style="font-size:13px;color:var(--text3);">Sin aprobadores configurados.</div>'}
+    `;
+  }).catch(e=>{
+    document.getElementById('apro-body').innerHTML=`<div style="color:var(--danger);padding:12px;">Error cargando aprobaciones: ${e.message}</div>`;
+  });
 }
 
 async function aprobar(pagoId, perfilId, rol){
@@ -1439,7 +1483,7 @@ function handleFile(e){
           num_egreso:celStr(iEgreso)||null,
           id_tercero, nombre_tercero,
           nombre_pago:capitalizar(celStr(iNomPag)),
-          tipo:celStr(iTipo)||null,
+          tipo:normalizarTipo(celStr(iTipo))||null,
           valor, fecha_pago,
           cod_bancolombia:celStr(iCod)||null,
           estado,
@@ -1530,8 +1574,86 @@ function showTab(tab, el){
 }
 
 // ===
-// GASTOS POR PAGADOR
+// COLUMNAS ORDENABLES
 // ===
+const COLS_DEFAULT = [
+  {key:'num_egreso',      label:'No. egreso'},
+  {key:'fecha_creacion',  label:'Fecha creación'},
+  {key:'empresaNombre',   label:'Pagador'},
+  {key:'proyectoNombre',  label:'Proyecto'},
+  {key:'concepto',        label:'Concepto'},
+  {key:'id_tercero',      label:'Id tercero'},
+  {key:'nombre_tercero',  label:'Nombre tercero'},
+  {key:'nombre_pago',     label:'Nombre a quien se pagó'},
+  {key:'tipo',            label:'Tipo de pago'},
+  {key:'valor',           label:'Valor'},
+  {key:'fecha_pago',      label:'Fecha de pago'},
+  {key:'cod_bancolombia', label:'Cód Banco'},
+  {key:'estado',          label:'Estado'},
+  {key:'comentario',      label:'Comentario'},
+];
+
+let colOrder = (()=>{
+  try{
+    const s=JSON.parse(localStorage.getItem('gp_col_order')||'null');
+    if(s&&Array.isArray(s)&&s.length===COLS_DEFAULT.length) return s;
+  }catch(e){}
+  return COLS_DEFAULT.map(c=>c.key);
+})();
+
+function getColsSorted(){
+  return colOrder.map(k=>COLS_DEFAULT.find(c=>c.key===k)).filter(Boolean);
+}
+
+function renderHeaders(){
+  const tr=document.getElementById('tr-headers');
+  if(!tr)return;
+  // Mantener el primer th (checkbox)
+  const chkTh=tr.querySelector('th');
+  tr.innerHTML='';
+  if(chkTh) tr.appendChild(chkTh);
+
+  getColsSorted().forEach((col,i)=>{
+    const th=document.createElement('th');
+    th.textContent=col.label;
+    th.draggable=true;
+    th.dataset.key=col.key;
+    th.style.cursor='grab';
+    th.title='Arrastra para reordenar';
+
+    th.addEventListener('dragstart',e=>{
+      e.dataTransfer.setData('text/plain',col.key);
+      th.style.opacity='.5';
+    });
+    th.addEventListener('dragend',()=>{th.style.opacity='1';});
+    th.addEventListener('dragover',e=>{e.preventDefault();th.style.background='var(--accent-light)';});
+    th.addEventListener('dragleave',()=>{th.style.background='';});
+    th.addEventListener('drop',e=>{
+      e.preventDefault();
+      th.style.background='';
+      const fromKey=e.dataTransfer.getData('text/plain');
+      const toKey=col.key;
+      if(fromKey===toKey)return;
+      const fi=colOrder.indexOf(fromKey);
+      const ti=colOrder.indexOf(toKey);
+      if(fi<0||ti<0)return;
+      colOrder.splice(fi,1);
+      colOrder.splice(ti,0,fromKey);
+      try{localStorage.setItem('gp_col_order',JSON.stringify(colOrder));}catch(e){}
+      renderHeaders();
+      renderTabla();
+    });
+    tr.appendChild(th);
+  });
+
+  // Th de acciones (siempre al final, no draggable)
+  const thAcc=document.createElement('th');
+  thAcc.textContent='Acciones';
+  tr.appendChild(thAcc);
+}
+
+// Inicializar headers al cargar
+document.addEventListener('DOMContentLoaded',()=>renderHeaders());
 const GP_PALETA=['#534AB7','#1D9E75','#D85A30','#185FA5','#BA7517','#993556','#791F1F','#0C447C'];
 const GP_EMPRESAS=['ASES','PNR','JSM','AMBIENTALES'];
 let _gpCharts=[];
