@@ -78,7 +78,9 @@
   .filters input:focus,.filters select:focus{border-color:var(--accent);}
 
   /* -- TABLA ---------------------------------------- */
-  .tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);max-height:calc(100vh - 320px);overflow-y:auto;}
+  .filtro-item{cursor:grab;border-radius:6px;transition:opacity .15s;}
+  .filtro-item:active{cursor:grabbing;}
+  .filtro-item.drag-over{outline:2px dashed var(--accent);outline-offset:2px;opacity:.7;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th{padding:9px 12px;background:var(--bg2);font-weight:600;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--text2);font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
   td{padding:8px 12px;border-bottom:1px solid var(--border2);vertical-align:middle;}
@@ -209,41 +211,63 @@
         <div class="card-header">
           <span class="card-title">Registro de egresos</span>
         </div>
-        <div class="filters" id="filtros-bar">
-          <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla();guardarFiltros()" style="width:160px;">
-          <input type="text" placeholder="🏦 Cód Banco..." id="filtroCod" oninput="renderTabla();guardarFiltros()" style="width:160px;">
-          <input type="text" placeholder="👤 Nombre..." id="filtroNombre" oninput="renderTabla();guardarFiltros()" style="width:160px;">
-          <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-            <option value="">Todos los estados</option>
-            <option value="Pendiente">Sin aprobar</option>
-            <option value="Pagada">Aprobado / Pagado</option>
-          </select>
-          <select id="filtroAprobacion" onchange="renderTabla();guardarFiltros()" style="width:180px;">
-            <option value="">Todas las aprobaciones</option>
-            <option value="con">Con aprobación profesional</option>
-            <option value="sin">Sin aprobación profesional</option>
-          </select>
-          <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
-            <option value="">Todos los pagadores</option>
-          </select>
-          <select id="filtroProyecto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-            <option value="">Todos los proyectos</option>
-          </select>
-          <select id="filtroConcepto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-            <option value="">Todos los conceptos</option>
-            <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
-            <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
-            <option>Apoyo Admtivo</option><option>Gastos Legales</option>
-          </select>
-          <select id="filtroTipo" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-            <option value="">Todos los tipos de pago</option>
-          </select>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
-            <input type="date" id="filtroFechaDesde" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">hasta
-            <input type="date" id="filtroFechaHasta" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-          </label>
+        <div class="filters" id="filtros-bar" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <div class="filtro-item" draggable="true" data-filtro="buscar">
+            <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroCod">
+            <input type="text" placeholder="🏦 Cód Banco..." id="filtroCod" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroNombre">
+            <input type="text" placeholder="👤 Nombre..." id="filtroNombre" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroEstado">
+            <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+              <option value="">Todos los estados</option>
+              <option value="Pendiente">Pendiente de pago</option>
+              <option value="Pagada">Pagado</option>
+            </select>
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroAprobacion">
+            <select id="filtroAprobacion" onchange="renderTabla();guardarFiltros()" style="width:180px;">
+              <option value="">Todas las aprobaciones</option>
+              <option value="con">Con aprobación profesional</option>
+              <option value="sin">Sin aprobación profesional</option>
+            </select>
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroEmpresa">
+            <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
+              <option value="">Todos los pagadores</option>
+            </select>
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroProyecto">
+            <select id="filtroProyecto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+              <option value="">Todos los proyectos</option>
+            </select>
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroConcepto">
+            <select id="filtroConcepto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+              <option value="">Todos los conceptos</option>
+              <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
+              <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
+              <option>Apoyo Admtivo</option><option>Gastos Legales</option>
+            </select>
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroTipo">
+            <select id="filtroTipo" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+              <option value="">Todos los tipos de pago</option>
+            </select>
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroFechaDesde">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
+              <input type="date" id="filtroFechaDesde" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+            </label>
+          </div>
+          <div class="filtro-item" draggable="true" data-filtro="filtroFechaHasta">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Hasta
+              <input type="date" id="filtroFechaHasta" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+            </label>
+          </div>
         </div>
 
         <div id="fila-priorizados" style="display:none;align-items:center;justify-content:space-between;background:#EFF6FF;border:1px solid #3B82F6;border-radius:var(--radius);padding:10px 16px;margin-bottom:12px;">
@@ -576,6 +600,8 @@ async function iniciarApp(user) {
   restaurarFiltros();
   inicializarFechasPorDefecto();
   renderHeaders();
+  restaurarOrdenFiltros();
+  initFiltroDragDrop();
   renderTabla();
   hide('loading');
   show('app-screen');
@@ -1024,7 +1050,7 @@ function renderTabla() {
     const mfHasta = !ffHasta || (p.fecha_pago && p.fecha_pago<=ffHasta);
     const tieneApro = (aprobacionesMap[p.id]||[]).length > 0;
     const mapro = !fapro || (fapro==='con' ? tieneApro : !tieneApro);
-    return m&&mcod&&mnombre&&mproy&&mconcepto&&mtipo&&mfDesde&&mfHasta&&(!fe||p.estado===fe)&&(!femp||String(p.empresa_id)==femp)&&mapro;
+    return m&&mcod&&mnombre&&mproy&&mconcepto&&mtipo&&mfDesde&&mfHasta&&(!fe||(p.estado||'').trim()===fe)&&(!femp||String(p.empresa_id)==femp)&&mapro;
   });
 
   document.getElementById('empty').style.display = fil.length?'none':'block';
@@ -1578,6 +1604,49 @@ function showTab(tab, el){
 // ===
 // COLUMNAS ORDENABLES
 // ===
+// Drag & drop de filtros
+function initFiltroDragDrop(){
+  const bar=document.getElementById('filtros-bar');
+  if(!bar)return;
+  let dragging=null;
+  bar.querySelectorAll('.filtro-item').forEach(item=>{
+    item.addEventListener('dragstart',e=>{
+      dragging=item;
+      setTimeout(()=>item.style.opacity='.4',0);
+    });
+    item.addEventListener('dragend',()=>{
+      item.style.opacity='1';
+      bar.querySelectorAll('.filtro-item').forEach(i=>i.classList.remove('drag-over'));
+      const orden=[...bar.querySelectorAll('.filtro-item')].map(i=>i.dataset.filtro);
+      try{localStorage.setItem('gp_filtros_orden',JSON.stringify(orden));}catch(e){}
+    });
+    item.addEventListener('dragover',e=>{
+      e.preventDefault();
+      if(dragging&&dragging!==item){
+        item.classList.add('drag-over');
+        const rect=item.getBoundingClientRect();
+        if(e.clientX<rect.left+rect.width/2) bar.insertBefore(dragging,item);
+        else bar.insertBefore(dragging,item.nextSibling);
+      }
+    });
+    item.addEventListener('dragleave',()=>item.classList.remove('drag-over'));
+    item.addEventListener('drop',e=>{e.preventDefault();item.classList.remove('drag-over');});
+  });
+}
+
+function restaurarOrdenFiltros(){
+  try{
+    const orden=JSON.parse(localStorage.getItem('gp_filtros_orden')||'null');
+    if(!orden||!Array.isArray(orden))return;
+    const bar=document.getElementById('filtros-bar');
+    if(!bar)return;
+    orden.forEach(key=>{
+      const item=bar.querySelector(`[data-filtro="${key}"]`);
+      if(item) bar.appendChild(item);
+    });
+  }catch(e){}
+}
+
 const COLS_DEFAULT = [
   {key:'num_egreso',      label:'No. egreso'},
   {key:'fecha_creacion',  label:'Fecha creación'},
