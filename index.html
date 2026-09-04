@@ -1042,11 +1042,11 @@ function renderTabla() {
   const puedeEditar  = ['pagador','admin'].includes(currentPerfil?.rol);
   const puedeEliminar= ['pagador','gerencia','admin'].includes(currentPerfil?.rol);
 
-  // Ordenar de más reciente a más antiguo
+  // Ordenar siempre de más reciente a más antiguo
   fil.sort((a,b)=>{
-    const fa=a.fecha_creacion||a.created_at||'';
-    const fb=b.fecha_creacion||b.created_at||'';
-    return fb.localeCompare(fa);
+    const fa=new Date(a.created_at||a.fecha_creacion||'2000-01-01').getTime();
+    const fb=new Date(b.created_at||b.fecha_creacion||'2000-01-01').getTime();
+    return fb-fa;
   });
 
   const colsActuales = getColsSorted();
