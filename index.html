@@ -185,7 +185,6 @@
     </div>
     <div class="topbar-right" style="display:flex;align-items:center;gap:12px;margin-left:auto;">
       <button class="btn" onclick="abrirCatalogo()"><i class="ti ti-building"></i> Empresas</button>
-      <button class="btn" onclick="sincronizar()" title="Actualizar datos"><i class="ti ti-refresh"></i> Actualizar</button>
       <button class="btn" onclick="openModal('modalImport')" id="btn-importar" style="display:none;"><i class="ti ti-upload"></i> Importar</button>
       <button class="btn" onclick="exportarExcel()"><i class="ti ti-download"></i> Exportar</button>
       <button class="btn primary" onclick="openModal('modalNuevo')" id="btn-nuevo" style="display:none;"><i class="ti ti-plus"></i> Nuevo pago</button>
@@ -214,40 +213,42 @@
           <button class="btn-sm" onclick="limpiarTodosFiltros()" title="Limpiar todos los filtros" style="color:var(--text2);">✕ Limpiar filtros</button>
         </div>
         <div class="filters" id="filtros-bar">
-          <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
+          <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();guardarFiltros()" style="width:160px;">
             <option value="">Todos los pagadores</option>
           </select>
-          <select id="filtroProyecto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+          <select id="filtroProyecto" onchange="guardarFiltros()" style="width:160px;">
             <option value="">Todos los proyectos</option>
           </select>
-          <select id="filtroConcepto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+          <select id="filtroConcepto" onchange="guardarFiltros()" style="width:160px;">
             <option value="">Todos los conceptos</option>
             <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
             <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
             <option>Apoyo Admtivo</option><option>Gastos Legales</option>
           </select>
-          <select id="filtroTipo" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+          <select id="filtroTipo" onchange="guardarFiltros()" style="width:160px;">
             <option value="">Todos los tipos de pago</option>
           </select>
-          <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="guardarFiltros()" style="width:160px;">
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
-            <input type="date" id="filtroFechaDesde" onchange="renderTabla();guardarFiltros()" style="width:150px;">
+            <input type="date" id="filtroFechaDesde" onchange="guardarFiltros()" style="width:150px;">
           </label>
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Hasta
-            <input type="date" id="filtroFechaHasta" onchange="renderTabla();guardarFiltros()" style="width:150px;">
+            <input type="date" id="filtroFechaHasta" onchange="guardarFiltros()" style="width:150px;">
           </label>
-          <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:170px;">
+          <select id="filtroEstado" onchange="guardarFiltros()" style="width:170px;">
             <option value="">Todos los estados</option>
             <option value="Pendiente">Pendiente de pago</option>
             <option value="Pagada">Pagado</option>
           </select>
-          <select id="filtroAprobacion" onchange="renderTabla();guardarFiltros()" style="width:170px;">
+          <select id="filtroAprobacion" onchange="guardarFiltros()" style="width:170px;">
             <option value="">Aprobación profesional</option>
             <option value="con">Aprobado</option>
             <option value="sin">No aprobado</option>
           </select>
           <input type="hidden" id="filtroCod" value="">
           <input type="hidden" id="filtroNombre" value="">
+          <button onclick="aplicarFiltros()" style="padding:9px 20px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">🔍 Filtrar</button>
+          <button onclick="limpiarTodosFiltros()" style="padding:9px 14px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;">✕ Limpiar</button>
         </div>
 
         <div id="fila-priorizados" style="display:none;align-items:center;justify-content:space-between;background:#EFF6FF;border:1px solid #3B82F6;border-radius:var(--radius);padding:10px 16px;margin-bottom:12px;">
@@ -1003,6 +1004,11 @@ async function sincronizar(){
   await cargarAprobaciones();
   renderStats();renderTabla();actualizarSelectEmpresas();
   hide('loading');
+}
+
+function aplicarFiltros(){
+  guardarFiltros();
+  renderTabla();
 }
 
 function limpiarTodosFiltros(){
@@ -2071,56 +2077,80 @@ function gpTodosProy(todosActivos){
 // ===
 const GP_CONCEPTOS=['Mano de Obra','Ferretería','Madera','Material Pétreo','Transporte','Alq Maq','Apoyo Admtivo','Gastos Legales'];
 
-function abrirCatalogo(){openModal('modalCatalogo');}
+function abrirCatalogo(){
+  openModal('modalCatalogo');
+}
+
+let _catalogoEmpresaId = null;
 
 function renderCatalogo(){
   const body=document.getElementById('catalogo-body');
   if(!body) return;
-  body.innerHTML=empresas.map((emp,ei)=>{
-    const proys=proyectos.filter(p=>p.empresa_id===emp.id);
-    return `<div style="border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:12px;background:var(--surface);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <span style="background:var(--accent-light);color:var(--accent);border-radius:6px;padding:2px 10px;font-size:13px;font-weight:600;">${emp.nombre}</span>
-        <span style="font-size:12px;color:var(--text3);">${proys.length} proyecto${proys.length!==1?'s':''}</span>
+
+  // Selector de empresa
+  const selectorHTML=`
+    <div style="margin-bottom:16px;">
+      <label style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:6px;">Seleccionar empresa</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${empresas.map(e=>`
+          <button onclick="seleccionarEmpresaCatalogo(${e.id})" 
+            style="padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;
+            border:2px solid ${_catalogoEmpresaId===e.id?'var(--accent)':'var(--border)'};
+            background:${_catalogoEmpresaId===e.id?'var(--accent-light)':'var(--surface)'};
+            color:${_catalogoEmpresaId===e.id?'var(--accent)':'var(--text2)'};">
+            ${e.nombre}
+          </button>`).join('')}
       </div>
-      ${proys.map((p,pi)=>`
-        <div style="border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;">
-          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 12px;background:var(--bg2);">
-            <span style="font-size:13px;font-weight:600;">${p.nombre}</span>
-            <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-              <label style="color:var(--text3);">Presup. total:</label>
-              <input type="text" value="${p.presupuesto>0?new Intl.NumberFormat('es-CO').format(p.presupuesto):''}"
-                placeholder="0" inputmode="numeric"
-                oninput="this.value=this.value.replace(/[^0-9]/g,'')" onblur="if(this.value)this.value=new Intl.NumberFormat('es-CO').format(parseInt(this.value)||0)" onfocus="this.value=this.value.replace(/\./g,'')"
-                onchange="guardarPresupuestoTotal(${p.id},this.value)"
-                style="width:130px;font-size:12px;text-align:right;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
-            </div>
+    </div>
+  `;
+
+  if(!_catalogoEmpresaId){
+    body.innerHTML=selectorHTML+`<div style="font-size:13px;color:var(--text3);text-align:center;padding:24px;">Selecciona una empresa para ver sus proyectos y presupuestos.</div>`;
+    return;
+  }
+
+  const emp=empresas.find(e=>e.id===_catalogoEmpresaId);
+  if(!emp) return;
+  const proys=proyectos.filter(p=>p.empresa_id===emp.id);
+
+  body.innerHTML=selectorHTML+`
+    ${proys.map(p=>`
+      <div style="border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;">
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding:8px 12px;background:var(--bg2);">
+          <span style="font-size:13px;font-weight:600;">${p.nombre}</span>
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+            <label style="color:var(--text3);">Presup. total:</label>
+            <span id="pres-total-${p.id}" style="font-weight:600;color:var(--accent);font-size:13px;">${p.presupuesto>0?new Intl.NumberFormat('es-CO').format(p.presupuesto):'$0'}</span>
           </div>
-          <div style="padding:8px 12px;">
-            <div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">Presupuesto por concepto</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;">
-              ${GP_CONCEPTOS.map(co=>{
-                const pc=presupuestos.find(x=>x.proyecto_id===p.id&&x.concepto===co);
-                return `<div style="display:flex;align-items:center;gap:6px;font-size:12px;">
-                  <span style="flex:1;color:var(--text2);">${co}</span>
-                  <input type="text" value="${pc&&pc.presupuesto>0?new Intl.NumberFormat('es-CO').format(pc.presupuesto):''}"
-                    placeholder="0" inputmode="numeric"
-                    oninput="this.value=this.value.replace(/[^0-9]/g,'')" onblur="if(this.value)this.value=new Intl.NumberFormat('es-CO').format(parseInt(this.value)||0)" onfocus="this.value=this.value.replace(/\./g,'')"
-                    onchange="guardarPresupuestoConcepto(${p.id},'${co}',this.value,${emp.id})"
-                    style="width:110px;font-size:11px;text-align:right;padding:3px 7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
-                </div>`;
-              }).join('')}
-            </div>
+        </div>
+        <div style="padding:8px 12px;">
+          <div style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:6px;">Presupuesto por concepto</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;">
+            ${GP_CONCEPTOS.map(co=>{
+              const pc=presupuestos.find(x=>x.proyecto_id===p.id&&x.concepto===co);
+              return `<div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+                <span style="flex:1;color:var(--text2);">${co}</span>
+                <input type="text" value="${pc&&pc.presupuesto>0?new Intl.NumberFormat('es-CO').format(pc.presupuesto):''}"
+                  placeholder="0" inputmode="numeric"
+                  oninput="this.value=this.value.replace(/[^0-9]/g,'')" onblur="if(this.value)this.value=new Intl.NumberFormat('es-CO').format(parseInt(this.value)||0)" onfocus="this.value=this.value.replace(/\./g,'')"
+                  onchange="guardarPresupuestoConcepto(${p.id},'${co}',this.value,${emp.id})"
+                  style="width:110px;font-size:11px;text-align:right;padding:3px 7px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);">
+              </div>`;
+            }).join('')}
           </div>
-        </div>`).join('')}
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <input type="text" id="np-${emp.id}" placeholder="Nombre del nuevo proyecto..." style="flex:1;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);">
-        <button class="btn-sm approve" onclick="agregarProyectoCloud(${emp.id},'${emp.nombre}')"><i class="ti ti-plus"></i> Agregar</button>
-      </div>
-    </div>`;
-  }).join('');
+        </div>
+      </div>`).join('')}
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <input type="text" id="np-${emp.id}" placeholder="Nombre del nuevo proyecto..." style="flex:1;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);">
+      <button class="btn-sm approve" onclick="agregarProyectoCloud(${emp.id},'${emp.nombre}')"><i class="ti ti-plus"></i> Agregar</button>
+    </div>
+  `;
 }
 
+function seleccionarEmpresaCatalogo(empId){
+  _catalogoEmpresaId = empId;
+  renderCatalogo();
+}
 async function guardarPresupuestoTotal(proyId, val){
   const raw=parseInt(String(val).replace(/\D/g,''))||0;
   await sb.from('proyectos').update({presupuesto:raw}).eq('id',proyId);
@@ -2135,15 +2165,14 @@ async function guardarPresupuestoConcepto(proyId, concepto, val, empId){
   const idx=presupuestos.findIndex(x=>x.proyecto_id===proyId&&x.concepto===concepto);
   if(idx>=0) presupuestos[idx].presupuesto=raw;
   else presupuestos.push({proyecto_id:proyId,concepto,presupuesto:raw});
-  // sumar en presupuesto total del proyecto
+  // calcular y guardar sumatoria automática
   const totalCons=presupuestos.filter(x=>x.proyecto_id===proyId).reduce((s,x)=>s+x.presupuesto,0);
   await sb.from('proyectos').update({presupuesto:totalCons}).eq('id',proyId);
   const p=proyectos.find(x=>x.id===proyId);
-  if(p){
-    p.presupuesto=totalCons;
-    const inp=document.querySelector(`[onchange="guardarPresupuestoTotal(${proyId},this.value)"]`);
-    if(inp) inp.value=totalCons>0?new Intl.NumberFormat('es-CO').format(totalCons):'';
-  }
+  if(p) p.presupuesto=totalCons;
+  // Actualizar el display del total sin rerenderizar todo
+  const totalEl=document.getElementById(`pres-total-${proyId}`);
+  if(totalEl) totalEl.textContent=totalCons>0?new Intl.NumberFormat('es-CO').format(totalCons):'$0';
 }
 
 async function agregarProyectoCloud(empId, empNombre){
