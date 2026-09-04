@@ -979,6 +979,8 @@ function inicializarFechasPorDefecto(){
     hasta.value=new Date().toISOString().split('T')[0];
   }
 }
+
+function restaurarFiltros(){
   try{
     const f=JSON.parse(localStorage.getItem('gp_filtros')||'{}');
     if(f.buscar) document.getElementById('buscar').value=f.buscar;
