@@ -185,6 +185,7 @@
     </div>
     <div class="topbar-right" style="display:flex;align-items:center;gap:12px;margin-left:auto;">
       <button class="btn" onclick="abrirCatalogo()"><i class="ti ti-building"></i> Empresas</button>
+      <button class="btn" onclick="sincronizar()" title="Actualizar datos"><i class="ti ti-refresh"></i> Actualizar</button>
       <button class="btn" onclick="openModal('modalImport')" id="btn-importar" style="display:none;"><i class="ti ti-upload"></i> Importar</button>
       <button class="btn" onclick="exportarExcel()"><i class="ti ti-download"></i> Exportar</button>
       <button class="btn primary" onclick="openModal('modalNuevo')" id="btn-nuevo" style="display:none;"><i class="ti ti-plus"></i> Nuevo pago</button>
@@ -230,10 +231,10 @@
           </select>
           <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla();guardarFiltros()" style="width:160px;">
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
-            <input type="date" id="filtroFechaDesde" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:150px;">
+            <input type="date" id="filtroFechaDesde" onchange="renderTabla();guardarFiltros()" style="width:150px;">
           </label>
           <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Hasta
-            <input type="date" id="filtroFechaHasta" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:150px;">
+            <input type="date" id="filtroFechaHasta" onchange="renderTabla();guardarFiltros()" style="width:150px;">
           </label>
           <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:170px;">
             <option value="">Todos los estados</option>
@@ -789,6 +790,12 @@ async function cargarPagos() {
   }));
   // cargar el resto en segundo plano sin bloquear la UI
   cargarAprobacionesYResto();
+  // Auto-sincronizar cada 2 minutos para capturar pagos de otros usuarios
+  setInterval(async()=>{
+    await cargarPagos();
+    await cargarAprobaciones();
+    renderStats();renderTabla();
+  }, 120000);
 }
 
 async function cargarAprobacionesYResto(){
@@ -987,6 +994,14 @@ function restaurarFiltros(){
     if(f.filtroFechaHasta) document.getElementById('filtroFechaHasta').value=f.filtroFechaHasta;
     if(f.filtroAprobacion) document.getElementById('filtroAprobacion').value=f.filtroAprobacion;
   }catch(e){}
+}
+
+async function sincronizar(){
+  show('loading');
+  await cargarPagos();
+  await cargarAprobaciones();
+  renderStats();renderTabla();actualizarSelectEmpresas();
+  hide('loading');
 }
 
 function limpiarTodosFiltros(){
@@ -1193,8 +1208,27 @@ async function insertarPago(obj){
   _insertando = false;
 
   // Guardar en Supabase en segundo plano sin bloquear
-  sb.from('pagos').insert(obj).then(({error})=>{
-    if(error) console.error('Error guardando pago:',error.message);
+  sb.from('pagos').insert(obj).then(async ({error})=>{
+    if(error){
+      console.error('Error guardando pago:',error.message);
+      // Si falla, quitar de memoria
+      const idx=pagos.findIndex(p=>p.id===tempId);
+      if(idx>=0) pagos.splice(idx,1);
+      renderStats();renderTabla();
+      alert('Error al guardar el pago: '+error.message);
+    } else {
+      // Recargar este pago con su ID real de Supabase
+      const {data}=await sb.from('pagos')
+        .select('id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)')
+        .eq('empresa_id',obj.empresa_id).eq('id_tercero',obj.id_tercero||'').eq('valor',obj.valor)
+        .order('created_at',{ascending:false}).limit(1);
+      if(data&&data[0]){
+        const idx=pagos.findIndex(p=>p.id===tempId);
+        if(idx>=0){
+          pagos[idx]={...data[0],empresaNombre:data[0].empresa?.nombre||'',proyectoNombre:data[0].proyecto?.nombre||''};
+        }
+      }
+    }
   });
 }
 
