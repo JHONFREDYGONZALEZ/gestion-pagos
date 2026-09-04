@@ -1810,7 +1810,7 @@ function renderGastos(){
     fechaPago: p.fecha_pago,
   }));
 
-  const todosAnios=[...new Set(pagosAdapt.filter(p=>p.fechaPago).map(p=>p.fechaPago.substring(0,4)))].sort();
+  const todosAnios=[...new Set(pagosAdapt.map(p=>(p.fechaPago||p.fecha_creacion||'').substring(0,4)).filter(Boolean))].sort();
   const todosTipos=[...new Set(pagosAdapt.map(p=>p.tipo).filter(Boolean))].sort();
   const todosProy=[...new Set(pagosAdapt.map(p=>p.proyecto).filter(Boolean))].sort();
 
@@ -1829,9 +1829,9 @@ function renderGastos(){
     const eEmp=gpFiltros.empresas.has(p.empresa);
     const eProy=gpFiltros.proyectos.has(p.proyecto);
     const eTipo=gpFiltros.tipos.has(p.tipo);
-    const eAnio=!p.fechaPago||gpFiltros.anios.has(p.fechaPago.substring(0,4));
+    const fechaRef2=(p.fechaPago||p.fecha_creacion||'');const eAnio=!fechaRef2||gpFiltros.anios.has(fechaRef2.substring(0,4));
     const eEst=gpFiltros.estado==='Todos'||p.estado===gpFiltros.estado;
-    const eMes=esConsolidado||!p.fechaPago||p.fechaPago.substring(5,7)===gpFiltros.mes;
+    const eMes=esConsolidado||!fechaRef2||fechaRef2.substring(5,7)===gpFiltros.mes;
     return eEmp&&eProy&&eTipo&&eAnio&&eEst&&eMes;
   });
 
@@ -1858,7 +1858,7 @@ function renderGastos(){
   const chipsTipo=todosTipos.map(t=>gpChip(t,gpFiltros.tipos.has(t),'#D85A30','#FAECE7',`gpT('tipos','${t.replace(/'/g,"\\'")}') `)).join('');
   const chipConsolidado=gpChip('Consolidado',esConsolidado,'#185FA5','#E6F1FB',`gpMes('Consolidado')`);
   const chipsMes=GP_MESES.map(m=>gpChip(m.l,gpFiltros.mes===m.v,'#185FA5','#E6F1FB',`gpMes('${m.v}')`)).join('');
-  const aniosFilt=todosAnios.filter(a=>base.some(p=>p.fechaPago&&p.fechaPago.startsWith(a)));
+  const aniosFilt=todosAnios.filter(a=>base.some(p=>(p.fechaPago||p.fecha_creacion||'').startsWith(a)));
   const legendHTML=aniosFilt.map(a=>`<span style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);"><span style="width:10px;height:10px;border-radius:2px;background:${colAnio[a]};flex-shrink:0;"></span>${a}</span>`).join('');
   const chH=Math.max(220,grupos.length*48+80);
   const nombreMes=esConsolidado?'':(GP_MESES.find(m=>m.v===gpFiltros.mes)?.l||'');
@@ -1950,8 +1950,9 @@ function renderGastos(){
       label:a,
       data:grupos.map(g=>{
         const fil=base.filter(p=>{
-          if(!p.fechaPago||!p.fechaPago.startsWith(a)) return false;
-          if(!esConsolidado && p.fechaPago.substring(5,7)!==gpFiltros.mes) return false;
+          const fechaRef=p.fechaPago||p.fecha_creacion||'';
+          if(!fechaRef.startsWith(a)) return false;
+          if(!esConsolidado && fechaRef.substring(5,7)!==gpFiltros.mes) return false;
           return esPorProy?p.proyecto===g:p.empresa===g;
         });
         return fil.reduce((s,p)=>s+p.valor,0);
