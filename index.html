@@ -211,63 +211,41 @@
         <div class="card-header">
           <span class="card-title">Registro de egresos</span>
         </div>
-        <div class="filters" id="filtros-bar" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-          <div class="filtro-item" draggable="true" data-filtro="buscar">
-            <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla();guardarFiltros()" style="width:160px;">
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroCod">
-            <input type="text" placeholder="🏦 Cód Banco..." id="filtroCod" oninput="renderTabla();guardarFiltros()" style="width:160px;">
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroNombre">
-            <input type="text" placeholder="👤 Nombre..." id="filtroNombre" oninput="renderTabla();guardarFiltros()" style="width:160px;">
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroEstado">
-            <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-              <option value="">Todos los estados</option>
-              <option value="Pendiente">Pendiente de pago</option>
-              <option value="Pagada">Pagado</option>
-            </select>
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroAprobacion">
-            <select id="filtroAprobacion" onchange="renderTabla();guardarFiltros()" style="width:180px;">
-              <option value="">Todas las aprobaciones</option>
-              <option value="con">Con aprobación profesional</option>
-              <option value="sin">Sin aprobación profesional</option>
-            </select>
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroEmpresa">
-            <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
-              <option value="">Todos los pagadores</option>
-            </select>
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroProyecto">
-            <select id="filtroProyecto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-              <option value="">Todos los proyectos</option>
-            </select>
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroConcepto">
-            <select id="filtroConcepto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-              <option value="">Todos los conceptos</option>
-              <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
-              <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
-              <option>Apoyo Admtivo</option><option>Gastos Legales</option>
-            </select>
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroTipo">
-            <select id="filtroTipo" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-              <option value="">Todos los tipos de pago</option>
-            </select>
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroFechaDesde">
-            <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
-              <input type="date" id="filtroFechaDesde" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-            </label>
-          </div>
-          <div class="filtro-item" draggable="true" data-filtro="filtroFechaHasta">
-            <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Hasta
-              <input type="date" id="filtroFechaHasta" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:160px;">
-            </label>
-          </div>
+        <div class="filters" id="filtros-bar">
+          <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
+            <option value="">Todos los pagadores</option>
+          </select>
+          <select id="filtroProyecto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+            <option value="">Todos los proyectos</option>
+          </select>
+          <select id="filtroConcepto" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+            <option value="">Todos los conceptos</option>
+            <option>Mano de Obra</option><option>Ferretería</option><option>Madera</option>
+            <option>Material Pétreo</option><option>Transporte</option><option>Alq Maq</option>
+            <option>Apoyo Admtivo</option><option>Gastos Legales</option>
+          </select>
+          <select id="filtroTipo" onchange="renderTabla();guardarFiltros()" style="width:160px;">
+            <option value="">Todos los tipos de pago</option>
+          </select>
+          <input type="text" placeholder="🔍 Buscar..." id="buscar" oninput="renderTabla();guardarFiltros()" style="width:160px;">
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Desde
+            <input type="date" id="filtroFechaDesde" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:150px;">
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--text2);">Hasta
+            <input type="date" id="filtroFechaHasta" oninput="renderTabla();guardarFiltros()" onchange="renderTabla();guardarFiltros()" style="width:150px;">
+          </label>
+          <select id="filtroEstado" onchange="renderTabla();guardarFiltros()" style="width:170px;">
+            <option value="">Todos los estados</option>
+            <option value="Pendiente">Pendiente de pago</option>
+            <option value="Pagada">Pagado</option>
+          </select>
+          <select id="filtroAprobacion" onchange="renderTabla();guardarFiltros()" style="width:170px;">
+            <option value="">Aprobación profesional</option>
+            <option value="con">Aprobado</option>
+            <option value="sin">No aprobado</option>
+          </select>
+          <input type="hidden" id="filtroCod" value="">
+          <input type="hidden" id="filtroNombre" value="">
         </div>
 
         <div id="fila-priorizados" style="display:none;align-items:center;justify-content:space-between;background:#EFF6FF;border:1px solid #3B82F6;border-radius:var(--radius);padding:10px 16px;margin-bottom:12px;">
@@ -600,8 +578,6 @@ async function iniciarApp(user) {
   restaurarFiltros();
   inicializarFechasPorDefecto();
   renderHeaders();
-  restaurarOrdenFiltros();
-  initFiltroDragDrop();
   renderTabla();
   hide('loading');
   show('app-screen');
@@ -1648,29 +1624,20 @@ function restaurarOrdenFiltros(){
 }
 
 const COLS_DEFAULT = [
-  {key:'num_egreso',      label:'No. egreso'},
   {key:'fecha_creacion',  label:'Fecha creación'},
   {key:'empresaNombre',   label:'Pagador'},
   {key:'proyectoNombre',  label:'Proyecto'},
   {key:'concepto',        label:'Concepto'},
   {key:'id_tercero',      label:'Id tercero'},
   {key:'nombre_tercero',  label:'Nombre tercero'},
-  {key:'nombre_pago',     label:'Nombre a quien se pagó'},
   {key:'tipo',            label:'Tipo de pago'},
   {key:'valor',           label:'Valor'},
   {key:'fecha_pago',      label:'Fecha de pago'},
-  {key:'cod_bancolombia', label:'Cód Banco'},
   {key:'estado',          label:'Estado'},
   {key:'comentario',      label:'Comentario'},
 ];
 
-let colOrder = (()=>{
-  try{
-    const s=JSON.parse(localStorage.getItem('gp_col_order')||'null');
-    if(s&&Array.isArray(s)&&s.length===COLS_DEFAULT.length) return s;
-  }catch(e){}
-  return COLS_DEFAULT.map(c=>c.key);
-})();
+let colOrder = COLS_DEFAULT.map(c=>c.key); // siempre usar orden por defecto
 
 function getColsSorted(){
   return colOrder.map(k=>COLS_DEFAULT.find(c=>c.key===k)).filter(Boolean);
