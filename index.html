@@ -210,6 +210,7 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">Registro de egresos</span>
+          <button class="btn-sm" onclick="limpiarTodosFiltros()" title="Limpiar todos los filtros" style="color:var(--text2);">✕ Limpiar filtros</button>
         </div>
         <div class="filters" id="filtros-bar">
           <select id="filtroEmpresa" onchange="actualizarSelectEmpresas();renderTabla();guardarFiltros()" style="width:160px;">
@@ -967,19 +968,8 @@ function guardarFiltros(){
 }
 
 function inicializarFechasPorDefecto(){
-  const desde=document.getElementById('filtroFechaDesde');
-  const hasta=document.getElementById('filtroFechaHasta');
-  if(!desde||!hasta)return;
-  // Solo poner por defecto si no hay valores guardados
-  if(!desde.value){
-    // Fecha del registro más antiguo con fecha_pago
-    const fechas=pagos.map(p=>p.fecha_pago||p.fecha_creacion).filter(Boolean).sort();
-    if(fechas.length) desde.value=fechas[0];
-  }
-  if(!hasta.value){
-    // Fecha de hoy
-    hasta.value=new Date().toISOString().split('T')[0];
-  }
+  // No inicializar fechas por defecto - el usuario las selecciona manualmente
+  // Esto evita que pagos nuevos sin fecha_pago queden excluidos del filtro
 }
 
 function restaurarFiltros(){
@@ -999,7 +989,14 @@ function restaurarFiltros(){
   }catch(e){}
 }
 
-function renderTabla() {
+function limpiarTodosFiltros(){
+  try{localStorage.removeItem('gp_filtros');}catch(e){}
+  ['buscar','filtroCod','filtroNombre'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['filtroEmpresa','filtroProyecto','filtroConcepto','filtroTipo','filtroEstado','filtroAprobacion'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['filtroFechaDesde','filtroFechaHasta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  actualizarSelectEmpresas();
+  renderTabla();
+}
   const q = document.getElementById('buscar').value.toLowerCase();
   const fe = g('filtroEstado');
   const femp = g('filtroEmpresa');
@@ -1015,18 +1012,36 @@ function renderTabla() {
 
   const fil = pagos.filter(p => {
     if(_verSoloPriorizados && !priorizados.has(p.id)) return false;
-    const campos = [p.num_egreso,p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.cod_bancolombia].map(v=>String(v||''));
-    const m = !q || campos.some(v=>v.toLowerCase().includes(q));
-    const mcod = !fcod || String(p.cod_bancolombia||'').toLowerCase().includes(fcod);
-    const mnombre = !fnombre || [p.nombre_tercero,p.nombre_pago].map(v=>String(v||'').toLowerCase()).some(v=>v.includes(fnombre));
-    const mproy = !fproy || String(p.proyecto_id)==fproy;
+
+    // Buscar general
+    const campos = [p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.concepto,p.tipo].map(v=>String(v||'').toLowerCase());
+    const m = !q || campos.some(v=>v.includes(q));
+
+    // Empresa
+    const memp = !femp || String(p.empresa_id||'')==femp;
+
+    // Proyecto
+    const mproy = !fproy || String(p.proyecto_id||'')==fproy;
+
+    // Concepto
     const mconcepto = !fconcepto || normalizarConcepto(p.concepto||'')===fconcepto;
+
+    // Tipo
     const mtipo = !ftipo || normalizarTipo(p.tipo||'')===ftipo;
-    const mfDesde = !ffDesde || (p.fecha_pago && p.fecha_pago>=ffDesde);
-    const mfHasta = !ffHasta || (p.fecha_pago && p.fecha_pago<=ffHasta);
+
+    // Fechas — siempre usar fecha_creacion como referencia principal
+    const fechaRef = (p.fecha_creacion||'').substring(0,10);
+    const mfDesde = !ffDesde || fechaRef >= ffDesde;
+    const mfHasta = !ffHasta || fechaRef <= ffHasta;
+
+    // Estado
+    const mest = !fe || (p.estado||'').trim()===fe;
+
+    // Aprobación
     const tieneApro = (aprobacionesMap[p.id]||[]).length > 0;
     const mapro = !fapro || (fapro==='con' ? tieneApro : !tieneApro);
-    return m&&mcod&&mnombre&&mproy&&mconcepto&&mtipo&&mfDesde&&mfHasta&&(!fe||(p.estado||'').trim()===fe)&&(!femp||String(p.empresa_id)==femp)&&mapro;
+
+    return m && memp && mproy && mconcepto && mtipo && mfDesde && mfHasta && mest && mapro;
   });
 
   document.getElementById('empty').style.display = fil.length?'none':'block';
@@ -1161,11 +1176,13 @@ async function insertarPago(obj){
   // Agregar en memoria y cerrar modal INMEDIATAMENTE
   const emp=empresas.find(e=>e.id==obj.empresa_id);
   const proy=proyectos.find(p=>p.id==obj.proyecto_id);
+  const hoy = new Date().toISOString().split('T')[0];
   const tempId = Date.now();
   pagos.unshift({
     ...obj,
     id: tempId,
-    fecha_creacion: new Date().toISOString().split('T')[0],
+    fecha_creacion: hoy,
+    created_at: new Date().toISOString(),
     empresaNombre: emp?.nombre||'',
     proyectoNombre: proy?.nombre||'',
   });
