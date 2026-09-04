@@ -56,7 +56,8 @@
   .section.active{display:block;}
 
   /* -- CARDS ---------------------------------------- */
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;box-shadow:var(--shadow);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;box-shadow:var(--shadow);overflow:hidden;}
+  #app-screen{max-width:100vw;overflow-x:hidden;}
   .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;}
   .card-title{font-size:15px;font-weight:600;}
 
@@ -87,6 +88,9 @@
   tr:last-child td{border-bottom:none;}
   tr:hover td{background:var(--bg2);}
   .trunc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 380px);border:1px solid var(--border);border-radius:var(--radius);}
+  .tbl-wrap table{width:max-content;min-width:100%;}
+  .section{max-width:100%;overflow:hidden;}
   .actions-cell{display:flex;gap:4px;align-items:center;}
 
   /* -- BADGES --------------------------------------- */
