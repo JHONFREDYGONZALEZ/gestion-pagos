@@ -1306,12 +1306,17 @@ function abrirEditar(id){
   document.getElementById('edit-titulo').textContent=`— ${p.num_egreso||'sin número'}`;
   document.getElementById('edit-pagada-aviso').style.display=esPagada?'flex':'none';
 
-  // poblar selects
+  // poblar selects sin disparar eventos
   const selEmp=document.getElementById('e-empresa');
+  selEmp.onchange=null; // desactivar temporalmente
   selEmp.innerHTML=empresas.map(e=>`<option value="${e.id}"${e.id===p.empresa_id?' selected':''}>${e.nombre}</option>`).join('');
   selEmp.value=p.empresa_id;
   const proys=proyectos.filter(pr=>pr.empresa_id===p.empresa_id);
-  document.getElementById('e-proyecto').innerHTML=proys.map(pr=>`<option value="${pr.id}"${pr.id===p.proyecto_id?' selected':''}>${pr.nombre}</option>`).join('');
+  const selProy=document.getElementById('e-proyecto');
+  selProy.innerHTML=proys.map(pr=>`<option value="${pr.id}"${pr.id===p.proyecto_id?' selected':''}>${pr.nombre}</option>`).join('');
+  selProy.value=p.proyecto_id;
+  // reactivar evento
+  selEmp.onchange=onEmpresaChangeEdit;
 
   // poblar campos
   document.getElementById('e-concepto').value=p.concepto||'';
