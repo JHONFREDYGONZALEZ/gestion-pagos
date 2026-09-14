@@ -519,6 +519,7 @@ let _guardandoEdicion = false;
 let _insertando = false;
 let _pagoPendienteGuardar = null;
 let aprobacionId = null;
+let _syncIntervalId = null; // evita registrar el auto-sync más de una vez
 
 const CONCEPTOS = ['Mano de Obra','Ferretería','Madera','Material Pétreo','Transporte','Alq Maq','Apoyo Admtivo','Gastos Legales'];
 const TIPOS = ['Prov Tranferencia','Prov PSE','Caja','Anticipo','Préstamo','Viáticos','Reembolso','Nomina','Crédito','Provisión'];
@@ -588,6 +589,7 @@ async function iniciarApp(user) {
   renderTabla();
   hide('loading');
   show('app-screen');
+  iniciarSincronizacionAutomatica();
 }
 
 // ===
@@ -823,8 +825,13 @@ async function cargarPagos() {
   }));
   // cargar el resto en segundo plano sin bloquear la UI
   cargarAprobacionesYResto();
-  // Auto-sincronizar cada 2 minutos para capturar pagos de otros usuarios
-  setInterval(async()=>{
+}
+
+// Auto-sincronizar cada 2 minutos para capturar pagos de otros usuarios.
+// Se registra una sola vez por sesión (llamar varias veces no duplica el intervalo).
+function iniciarSincronizacionAutomatica(){
+  if (_syncIntervalId) return;
+  _syncIntervalId = setInterval(async()=>{
     await cargarPagos();
     await cargarAprobaciones();
     renderStats();renderTabla();
@@ -863,7 +870,6 @@ async function cargarPagosResto(from) {
       empresaNombre: p.empresa?.nombre || '',
       proyectoNombre: p.proyecto?.nombre || '',
     })));
-    renderStats();
     if(data.length < pageSize) break;
     from += pageSize;
   }
