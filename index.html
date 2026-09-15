@@ -1090,8 +1090,8 @@ function renderTabla() {
     // Tipo
     const mtipo = !ftipo || normalizarTipo(p.tipo||'')===ftipo;
 
-    // Fechas — siempre usar fecha_creacion como referencia principal
-    const fechaRef = (p.fecha_creacion||'').substring(0,10);
+    // Fechas — usar fecha_pago como referencia principal
+    const fechaRef = (p.fecha_pago||'').substring(0,10);
     const mfDesde = !ffDesde || fechaRef >= ffDesde;
     const mfHasta = !ffHasta || fechaRef <= ffHasta;
 
