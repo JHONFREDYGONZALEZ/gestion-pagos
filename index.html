@@ -528,6 +528,9 @@ let _insertando = false;
 let _pagoPendienteGuardar = null;
 let aprobacionId = null;
 let _syncIntervalId = null; // evita registrar el auto-sync más de una vez
+const FILAS_POR_BLOQUE = 200;
+let _limiteFilas = FILAS_POR_BLOQUE; // filas dibujadas en la tabla (el resto se muestra con "Mostrar más")
+let _filasFiltradas = [];            // todos los pagos que cumplen los filtros actuales
 
 const CONCEPTOS = ['Mano de Obra','Ferretería','Madera','Material Pétreo','Transporte','Alq Maq','Apoyo Admtivo','Gastos Legales'];
 const TIPOS = ['Prov Tranferencia','Prov PSE','Caja','Anticipo','Préstamo','Viáticos','Reembolso','Nomina','Crédito','Provisión'];
@@ -618,15 +621,16 @@ function togglePriorizado(id, checked){
 }
 
 function toggleTodos(checked){
-  // seleccionar/deseleccionar todos los visibles en la tabla
-  const checkboxes=document.querySelectorAll('#tbody input[type=checkbox]');
-  checkboxes.forEach(chk=>{
-    const id=parseInt(chk.getAttribute('onchange').match(/\d+/)[0]);
-    if(checked) priorizados.add(id);
-    else priorizados.delete(id);
-    chk.checked=checked;
-    const row=document.getElementById(`row-${id}`);
-    if(row) row.style.background=checked?'#EFF6FF':'';
+  // seleccionar/deseleccionar todos los pagos que cumplen los filtros actuales (no solo los dibujados)
+  _filasFiltradas.forEach(p=>{
+    if(checked) priorizados.add(p.id);
+    else priorizados.delete(p.id);
+    const row=document.getElementById(`row-${p.id}`);
+    if(row){
+      row.style.background=checked?'#EFF6FF':'';
+      const chk=row.querySelector('input[type=checkbox]');
+      if(chk) chk.checked=checked;
+    }
   });
   guardarPriorizados();
   actualizarBarraPriorizados();
@@ -649,6 +653,7 @@ function filtrarPriorizados(){
   _verSoloPriorizados = !_verSoloPriorizados;
   const btn=document.querySelector('#fila-priorizados button[onclick="filtrarPriorizados()"]');
   if(btn) btn.textContent=_verSoloPriorizados?'Ver todos':'Ver selección';
+  _limiteFilas=FILAS_POR_BLOQUE;
   renderTabla();
 }
 
@@ -811,28 +816,37 @@ async function toggleActivo(id, activo) {
 // CARGA DE DATOS
 // ===
 async function cargarEmpresas() {
-  const { data: emps } = await sb.from('empresas').select('*').order('nombre');
+  const [{ data: emps }, { data: proys }, { data: pres }] = await Promise.all([
+    sb.from('empresas').select('*').order('nombre'),
+    sb.from('proyectos').select('*').order('nombre'),
+    sb.from('presupuestos_concepto').select('*'),
+  ]);
   empresas = emps || [];
-  const { data: proys } = await sb.from('proyectos').select('*').order('nombre');
   proyectos = proys || [];
-  const { data: pres } = await sb.from('presupuestos_concepto').select('*');
   presupuestos = pres || [];
 }
 
+const COLS_PAGOS = `id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)`;
+const mapPago = p => ({ ...p, empresaNombre: p.empresa?.nombre || '', proyectoNombre: p.proyecto?.nombre || '' });
+let _cargaId = 0; // descarta cargas viejas si se inicia otra antes de que termine
+
 async function cargarPagos() {
-  const { data, error } = await sb
+  const miCarga = ++_cargaId;
+  // id como segundo criterio: created_at se repite en pagos importados en lote y sin desempate las páginas pueden repetir o saltarse filas
+  const { data, error, count } = await sb
     .from('pagos')
-    .select(`id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)`)
+    .select(COLS_PAGOS, { count: 'exact' })
     .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(1000);
-  if(error){ console.error('cargarPagos error:',error); return; }
-  pagos = (data||[]).map(p => ({
-    ...p,
-    empresaNombre: p.empresa?.nombre || '',
-    proyectoNombre: p.proyecto?.nombre || '',
-  }));
+  if(error){
+    console.error('cargarPagos error:',error);
+    notificar('No se pudieron cargar los pagos: '+msgError(error),'error');
+    return;
+  }
+  pagos = (data||[]).map(mapPago);
   // cargar el resto en segundo plano sin bloquear la UI
-  cargarAprobacionesYResto();
+  cargarAprobacionesYResto(miCarga, count || pagos.length);
 }
 
 // Auto-sincronizar cada 5 minutos para capturar pagos de otros usuarios.
@@ -846,10 +860,9 @@ function iniciarSincronizacionAutomatica(){
   }, 300000);
 }
 
-async function cargarAprobacionesYResto(){
-  // Cargar aprobaciones y resto de pagos solo al inicio
-  await cargarAprobaciones();
-  await cargarPagosResto(1000);
+async function cargarAprobacionesYResto(miCarga, total){
+  await Promise.all([cargarAprobaciones(), cargarPagosResto(1000, total, miCarga)]);
+  if(miCarga !== _cargaId) return;
   renderStats();renderTabla();
 }
 
@@ -864,23 +877,26 @@ async function cargarAprobaciones(){
   renderTabla();
 }
 
-async function cargarPagosResto(from) {
+async function cargarPagosResto(from, total, miCarga) {
   const pageSize = 1000;
-  while(true) {
-    const { data, error } = await sb
-      .from('pagos')
-      .select(`id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)`)
-      .order('created_at', { ascending: false })
-      .range(from, from + pageSize - 1);
-    if(error || !data || data.length === 0) break;
-    pagos = pagos.concat(data.map(p => ({
-      ...p,
-      empresaNombre: p.empresa?.nombre || '',
-      proyectoNombre: p.proyecto?.nombre || '',
-    })));
-    if(data.length < pageSize) break;
-    from += pageSize;
+  const peticiones = [];
+  for(let f = from; f < total; f += pageSize){
+    peticiones.push(sb.from('pagos').select(COLS_PAGOS)
+      .order('created_at', { ascending: false }).order('id', { ascending: false })
+      .range(f, f + pageSize - 1));
   }
+  if(!peticiones.length) return;
+  let resultados;
+  try{ resultados = await Promise.all(peticiones); }
+  catch(e){ resultados = [{ error: e }]; }
+  if(miCarga !== _cargaId) return;
+  const fallo = resultados.find(r => r.error || !r.data);
+  if(fallo){
+    console.error('cargarPagosResto error:', fallo.error);
+    notificar('No se pudieron cargar todos los pagos ('+msgError(fallo.error)+'). Solo se muestran los más recientes; recarga la página.','error');
+    return;
+  }
+  resultados.forEach(r => { pagos = pagos.concat(r.data.map(mapPago)); });
 }
 
 // ===
@@ -1068,6 +1084,7 @@ async function sincronizar(){
 
 function aplicarFiltros(){
   guardarFiltros();
+  _limiteFilas=FILAS_POR_BLOQUE;
   renderTabla();
 }
 
@@ -1077,6 +1094,7 @@ function limpiarTodosFiltros(){
   ['filtroEmpresa','filtroProyecto','filtroConcepto','filtroTipo','filtroEstado','filtroAprobacion'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   ['filtroFechaDesde','filtroFechaHasta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   actualizarSelectEmpresas();
+  _limiteFilas=FILAS_POR_BLOQUE;
   renderTabla();
 }
 
@@ -1173,7 +1191,16 @@ function renderTabla() {
     }
   };
 
-  document.getElementById('tbody').innerHTML = fil.map(p => `<tr id="row-${p.id}" ${priorizados.has(p.id)?'style="background:#EFF6FF;"':''}>
+  _filasFiltradas = fil;
+  const visibles = fil.slice(0, _limiteFilas);
+  const filaMas = fil.length > visibles.length
+    ? `<tr><td colspan="${colsActuales.length+2}" style="text-align:center;padding:14px;">
+        <button class="btn" onclick="mostrarMasFilas()">Mostrar ${Math.min(FILAS_POR_BLOQUE, fil.length-visibles.length)} más</button>
+        <span style="margin-left:10px;color:var(--text3);font-size:12px;">Mostrando ${visibles.length} de ${fil.length} pagos</span>
+      </td></tr>`
+    : '';
+
+  document.getElementById('tbody').innerHTML = visibles.map(p => `<tr id="row-${p.id}" ${priorizados.has(p.id)?'style="background:#EFF6FF;"':''}>
     <td><input type="checkbox" onchange="togglePriorizado(${p.id},this.checked)" ${priorizados.has(p.id)?'checked':''}></td>
     ${colsActuales.map(col=>renderCell(p,col.key)).join('')}
     <td><div class="actions-cell">
@@ -1181,7 +1208,12 @@ function renderTabla() {
       ${puedeEditar?`<button class="btn-sm" onclick="abrirEditar(${p.id})" title="Editar" style="border-color:#3B82F6;color:#3B82F6;background:#EFF6FF;font-size:13px;padding:3px 7px;">✏️</button>`:''}
       ${puedeEliminar?`<button class="btn-sm" onclick="eliminarPago(${p.id})" ${p.estado==='Pagada'?'disabled':''} title="Eliminar" style="${p.estado==='Pagada'?'opacity:.35;cursor:not-allowed;':'border-color:#E53E3E;color:#E53E3E;background:#FEF2F2;'}font-size:13px;padding:3px 7px;">🗑</button>`:''}
     </div></td>
-  </tr>`).join('');
+  </tr>`).join('') + filaMas;
+}
+
+function mostrarMasFilas(){
+  _limiteFilas += FILAS_POR_BLOQUE;
+  renderTabla();
 }
 
 // ===
@@ -1306,6 +1338,16 @@ async function eliminarPago(id){
 }
 
 // --- EDITAR -----------------------------------------------
+function asegurarOpcion(selectId,valor){
+  const sel=document.getElementById(selectId);
+  sel.querySelectorAll('option[data-temp]').forEach(o=>o.remove());
+  if(valor && ![...sel.options].some(o=>o.value===valor)){
+    const o=document.createElement('option');
+    o.value=valor;o.textContent=valor;o.dataset.temp='1';
+    sel.appendChild(o);
+  }
+}
+
 function abrirEditar(id){
   const p=pagos.find(x=>x.id===id);if(!p)return;
   editandoId=id;_guardandoEdicion=false;
@@ -1325,7 +1367,9 @@ function abrirEditar(id){
   // reactivar evento
   selEmp.onchange=onEmpresaChangeEdit;
 
-  // poblar campos
+  // poblar campos (si el pago trae un concepto/tipo que no está en la lista, se agrega como opción para no perderlo)
+  asegurarOpcion('e-concepto',p.concepto);
+  asegurarOpcion('e-tipo',p.tipo);
   document.getElementById('e-concepto').value=p.concepto||'';
   document.getElementById('e-idtercero').value=p.id_tercero?new Intl.NumberFormat('es-CO').format(parseInt(p.id_tercero)):'';
   document.getElementById('e-nombretercero').value=p.nombre_tercero||'';
@@ -1373,8 +1417,13 @@ async function guardarEdicion(){
     const nombre_tercero=capitalizar(g('e-nombretercero'));
     const nombre_pago=capitalizar(g('e-nombrepago'));
     const tipo=g('e-tipo');
-    if(![empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo].every(Boolean)||!valor){
-      _guardandoEdicion=false;alert('Completa todos los campos obligatorios.');return;
+    const faltan=[['Pagador',empresa_id],['Proyecto',proyecto_id],['Concepto',concepto],['Identificación',id_tercero],
+      ['Nombre tercero',nombre_tercero],['Nombre a quien se pagó',nombre_pago],['Tipo de pago',tipo],['Valor',valor]]
+      .filter(x=>!x[1]).map(x=>x[0]);
+    if(faltan.length){
+      _guardandoEdicion=false;
+      notificar('Completa los campos obligatorios: '+faltan.join(', '),'error');
+      return;
     }
     Object.assign(updates,{empresa_id:parseInt(empresa_id),proyecto_id:parseInt(proyecto_id),
       concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
