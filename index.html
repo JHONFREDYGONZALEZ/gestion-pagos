@@ -1380,7 +1380,20 @@ async function guardarEdicion(){
       comentario:capitalizarFrase(g('e-comentario'))||null});
   }
 
-  // Actualizar en memoria INMEDIATAMENTE y cerrar modal
+  // Guardar en Supabase y confirmar que realmente se actualizó una fila antes de tocar la pantalla
+  let error=null,filas=null;
+  try{
+    const res=await sb.from('pagos').update(updates).eq('id',p.id).select('id');
+    error=res.error;filas=res.data;
+  }catch(e){error=e;}
+
+  if(error||!filas||filas.length===0){
+    _guardandoEdicion=false;
+    console.error('Error actualizando pago:',error?.message||'0 filas actualizadas');
+    alert('No se pudieron guardar los cambios: '+(error?.message||'la base de datos no permitió actualizar este pago (posible falta de permisos).')+'\n\nEl pago NO fue modificado.');
+    return;
+  }
+
   Object.assign(p, updates);
   if(updates.empresa_id){const emp=empresas.find(e=>e.id===updates.empresa_id);if(emp)p.empresaNombre=emp.nombre;}
   if(updates.proyecto_id){const proy=proyectos.find(pr=>pr.id===updates.proyecto_id);if(proy)p.proyectoNombre=proy.nombre;}
@@ -1388,12 +1401,6 @@ async function guardarEdicion(){
   renderStats();renderTabla();
   closeModal('modalEditar');
   editandoId=null;_guardandoEdicion=false;
-
-  // Guardar en Supabase en segundo plano
-  const idEditar=p.id;
-  sb.from('pagos').update(updates).eq('id',idEditar).then(({error})=>{
-    if(error) console.error('Error actualizando pago:',error.message);
-  });
 }
 
 // --- APROBACIONES -----------------------------------------
