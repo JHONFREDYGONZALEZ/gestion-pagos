@@ -93,6 +93,12 @@
   .section{max-width:100%;overflow:hidden;}
   .actions-cell{display:flex;gap:4px;align-items:center;}
 
+  /* -- SUGERENCIAS DE TERCEROS ---------------------- */
+  .sug-list{position:absolute;left:0;right:0;top:100%;z-index:60;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:240px;overflow-y:auto;margin-top:2px;}
+  .sug-item{padding:8px 10px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .sug-item:hover,.sug-item.sel{background:var(--accent-light);}
+  .sug-item small{color:var(--text3);font-family:monospace;white-space:nowrap;}
+
   /* -- AVISOS --------------------------------------- */
   #toast-cont{position:fixed;right:16px;bottom:16px;z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px));}
   .toast{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;box-shadow:var(--shadow);border:1px solid;}
@@ -337,8 +343,10 @@
       <div class="form-group"><label>Identificación del tercero *</label>
         <input type="text" id="f-idtercero" placeholder="NIT / CC" inputmode="numeric" oninput="fmtIdInput(this);autocompletarTercero()">
         <span class="notice" id="f-idtercero-hint" style="display:none;color:var(--accent2);"></span></div>
-      <div class="form-group"><label>Nombre tercero *</label>
-        <input type="text" id="f-nombretercero" placeholder="Razón social o nombre completo"></div>
+      <div class="form-group" style="position:relative;"><label>Nombre tercero *</label>
+        <input type="text" id="f-nombretercero" placeholder="Razón social o nombre completo" autocomplete="off"
+          oninput="sugerirTerceros()" onkeydown="teclaSugerencias(event)" onblur="ocultarSugerencias()">
+        <div id="sug-terceros" class="sug-list" style="display:none;"></div></div>
       <div class="form-group"><label>Nombre a quien se pagó *</label>
         <input type="text" id="f-nombrepago" placeholder="Beneficiario del pago"></div>
       <div class="form-group"><label>Tipo de pago *</label>
@@ -361,7 +369,7 @@
     <div class="divider"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="closeModal('modalNuevo')">Cancelar</button>
-      <button class="btn primary" onclick="guardarPago()"><i class="ti ti-check"></i> Guardar pago</button>
+      <button class="btn primary" id="btn-guardar-pago" onclick="guardarPago()"><i class="ti ti-check"></i> Guardar pago</button>
     </div>
   </div>
 </div>
@@ -526,6 +534,7 @@ let editandoId = null;
 let _guardandoEdicion = false;
 let _insertando = false;
 let _pagoPendienteGuardar = null;
+let _dupConfirmadoKey = null; // pago duplicado ya confirmado con "Continuar" (evita repetir la alerta al reintentar)
 let aprobacionId = null;
 let _syncIntervalId = null; // evita registrar el auto-sync más de una vez
 const FILAS_POR_BLOQUE = 200;
@@ -1232,7 +1241,82 @@ function autocompletarTercero(){
   } else { hint.style.display='none'; }
 }
 
+// --- Sugerencias de terceros al escribir el nombre ---
+let _idxTerceros=null, _sugItems=[], _sugSel=-1;
+const normTxt=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+
+function construirIndiceTerceros(){
+  const m=new Map();
+  for(const p of pagos){ // pagos viene del más reciente al más antiguo: se conserva el dato más nuevo de cada tercero
+    const nom=(p.nombre_tercero||'').trim();
+    if(!nom) continue;
+    const idt=String(p.id_tercero||'').replace(/\D/g,'');
+    const k=idt+'|'+normTxt(nom);
+    if(!m.has(k)) m.set(k,{id_tercero:idt,nombre_tercero:nom,nombre_pago:p.nombre_pago||'',n:normTxt(nom)});
+  }
+  _idxTerceros=[...m.values()];
+}
+
+function sugerirTerceros(){
+  const q=normTxt(document.getElementById('f-nombretercero').value).trim();
+  if(q.length<2){ocultarSugerencias();return;}
+  if(!_idxTerceros) construirIndiceTerceros();
+  const tokens=q.split(/\s+/);
+  _sugItems=_idxTerceros.filter(t=>tokens.every(tk=>t.n.includes(tk)))
+    .sort((a,b)=>(b.n.startsWith(q)-a.n.startsWith(q))||a.n.localeCompare(b.n))
+    .slice(0,8);
+  const box=document.getElementById('sug-terceros');
+  box.replaceChildren();
+  _sugSel=-1;
+  if(!_sugItems.length){box.style.display='none';return;}
+  _sugItems.forEach((t,i)=>{
+    const d=document.createElement('div');d.className='sug-item';
+    const nom=document.createElement('span');nom.textContent=t.nombre_tercero;
+    const idt=document.createElement('small');
+    idt.textContent=t.id_tercero?new Intl.NumberFormat('es-CO').format(parseInt(t.id_tercero)):'sin identificación';
+    d.append(nom,idt);
+    d.addEventListener('mousedown',e=>{e.preventDefault();elegirTercero(i);}); // mousedown: llega antes del blur del campo
+    box.appendChild(d);
+  });
+  box.style.display='block';
+}
+
+function elegirTercero(i){
+  const t=_sugItems[i];if(!t)return;
+  const idEl=document.getElementById('f-idtercero');
+  idEl.value=t.id_tercero?new Intl.NumberFormat('es-CO').format(parseInt(t.id_tercero)):'';
+  document.getElementById('f-nombretercero').value=t.nombre_tercero;
+  document.getElementById('f-nombrepago').value=t.nombre_pago;
+  const hint=document.getElementById('f-idtercero-hint');
+  hint.textContent=`✓ Tercero seleccionado: ${t.nombre_tercero}`;
+  hint.style.display='block';
+  ocultarSugerencias();
+}
+
+function ocultarSugerencias(){
+  const box=document.getElementById('sug-terceros');
+  if(box) box.style.display='none';
+  _sugSel=-1;
+}
+
+function teclaSugerencias(e){
+  const box=document.getElementById('sug-terceros');
+  if(!box||box.style.display==='none') return;
+  const items=box.querySelectorAll('.sug-item');
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    _sugSel=(_sugSel+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;
+    items.forEach((it,i)=>it.classList.toggle('sel',i===_sugSel));
+    items[_sugSel].scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'&&_sugSel>=0){
+    e.preventDefault();elegirTercero(_sugSel);
+  } else if(e.key==='Escape'){
+    ocultarSugerencias();
+  }
+}
+
 function openNuevo(){
+  _idxTerceros=null; ocultarSugerencias(); _dupConfirmadoKey=null;
   ['idtercero','nombretercero','nombrepago','bancolombia','egreso'].forEach(id=>{
     const el=document.getElementById('f-'+id); if(el) el.value='';
   });
@@ -1245,7 +1329,7 @@ function openNuevo(){
   const fe=document.getElementById('f-empresa'); if(fe) fe.value='';
   const fp=document.getElementById('f-proyecto');
   if(fp){fp.disabled=true;fp.innerHTML='<option value="">Primero seleccione pagador</option>';}
-  openModal('modalNuevo');
+  document.getElementById('modalNuevo').classList.add('open'); // openModal ya lo abre; llamarlo aquí causaba recursión infinita
 }
 
 function fechaLocal(){
@@ -1267,8 +1351,11 @@ async function guardarPago(){
     alert('Completa todos los campos obligatorios (*).');return;
   }
 
+  if(_insertando) return;
   const duplicado = pagos.find(p=>String(p.id_tercero||'').replace(/\D/g,'')=== id_tercero && p.valor===valor);
-  if(duplicado){
+  // Si ya confirmó "Continuar" para este mismo pago y el guardado falló, no volver a preguntar
+  const yaConfirmado = _dupConfirmadoKey === claveDuplicado({empresa_id,proyecto_id,concepto,id_tercero,valor,tipo});
+  if(duplicado && !yaConfirmado){
     _pagoPendienteGuardar={empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,
       num_egreso:g('f-egreso')||null,cod_bancolombia:g('f-bancolombia')||null,
       comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',fecha_creacion:fechaLocal(),
@@ -1285,22 +1372,37 @@ async function guardarPago(){
     comentario:capitalizarFrase(g('f-comentario'))||null,estado:'Pendiente',fecha_creacion:fechaLocal(),creado_por:currentUser.id});
 }
 
+const claveDuplicado = o => [o.empresa_id,o.proyecto_id,o.concepto,o.id_tercero,o.valor,o.tipo].join('|');
+
 async function confirmarGuardarPago(){
   if(!_pagoPendienteGuardar)return;
-  await insertarPago(_pagoPendienteGuardar);
-  _pagoPendienteGuardar=null;
+  const obj=_pagoPendienteGuardar;
+  _dupConfirmadoKey=claveDuplicado(obj); // recuerda la confirmación: si el guardado falla y reintenta, no se vuelve a preguntar
   closeModal('modalDuplicado');
+  await insertarPago(obj);
+}
+
+function marcarGuardando(on){
+  const b=document.getElementById('btn-guardar-pago');
+  if(!b) return;
+  b.disabled=on;
+  b.innerHTML=on?'Guardando...':'<i class="ti ti-check"></i> Guardar pago';
 }
 
 async function insertarPago(obj){
   if(_insertando) return;
   _insertando = true;
+  marcarGuardando(true);
   try{
-    const {data,error}=await sb.from('pagos').insert(obj)
+    const insercion=sb.from('pagos').insert(obj)
       .select('id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,created_at,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)')
       .single();
+    const limite=new Promise((_,rechazar)=>setTimeout(()=>rechazar(new Error(
+      'la conexión tardó demasiado en responder. Antes de reintentar, revisa en la tabla si el pago quedó guardado.')),20000));
+    const {data,error}=await Promise.race([insercion,limite]);
     if(error||!data) throw error||new Error('la base de datos no devolvió el pago guardado');
     pagos.unshift({...data,empresaNombre:data.empresa?.nombre||'',proyectoNombre:data.proyecto?.nombre||''});
+    _dupConfirmadoKey=null;
     renderStats();renderTabla();actualizarSelectEmpresas();
     closeModal('modalNuevo');
     notificar('Pago guardado correctamente','ok');
@@ -1309,6 +1411,7 @@ async function insertarPago(obj){
     notificar('NO se guardó el pago: '+msgError(e)+' Tus datos siguen en el formulario.','error');
   }finally{
     _insertando = false;
+    marcarGuardando(false);
   }
 }
 
