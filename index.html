@@ -93,6 +93,14 @@
   .section{max-width:100%;overflow:hidden;}
   .actions-cell{display:flex;gap:4px;align-items:center;}
 
+  /* -- AVISOS --------------------------------------- */
+  #toast-cont{position:fixed;right:16px;bottom:16px;z-index:10000;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px));}
+  .toast{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:var(--radius);font-size:13px;font-weight:500;box-shadow:var(--shadow);border:1px solid;}
+  .toast span{flex:1;}
+  .toast button{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:inherit;}
+  .toast-ok{background:var(--green-bg);color:var(--green);border-color:#b7dca4;}
+  .toast-error{background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;}
+
   /* -- BADGES --------------------------------------- */
   .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
   .badge.pagada{background:var(--green-bg);color:var(--green);}
@@ -890,6 +898,21 @@ function fmtDate(d) {
     return fecha.toLocaleDateString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric'}); 
   } catch(e){return d;} 
 }
+function notificar(msg,tipo){
+  let cont=document.getElementById('toast-cont');
+  if(!cont){cont=document.createElement('div');cont.id='toast-cont';document.body.appendChild(cont);}
+  const t=document.createElement('div');
+  t.className='toast '+(tipo==='error'?'toast-error':'toast-ok');
+  const txt=document.createElement('span');txt.textContent=msg;
+  const x=document.createElement('button');x.textContent='×';x.onclick=()=>t.remove();
+  t.append(txt,x);cont.appendChild(t);
+  if(tipo!=='error') setTimeout(()=>t.remove(),3500);
+}
+function msgError(e){
+  const m=String((e&&e.message)||e||'');
+  if(!navigator.onLine||/failed to fetch|networkerror|network request failed|load failed/i.test(m)) return 'no hay conexión con el servidor. Revisa tu internet e intenta de nuevo.';
+  return m||'error desconocido';
+}
 function capitalizar(s) { if(!s)return''; return s.toLowerCase().replace(/(^\s*\S)|(\s+\S)/g,c=>c.toUpperCase()); }
 function capitalizarFrase(s) { if(!s)return''; const t=s.trim(); return t.charAt(0).toUpperCase()+t.slice(1).toLowerCase(); }
 function fmtIdInput(el) {
@@ -1240,49 +1263,21 @@ async function confirmarGuardarPago(){
 async function insertarPago(obj){
   if(_insertando) return;
   _insertando = true;
-
-  // Agregar en memoria y cerrar modal INMEDIATAMENTE
-  const emp=empresas.find(e=>e.id==obj.empresa_id);
-  const proy=proyectos.find(p=>p.id==obj.proyecto_id);
-  // Usar fecha local (Colombia UTC-5), no UTC
-  const ahora = new Date();
-  const hoy = `${ahora.getFullYear()}-${String(ahora.getMonth()+1).padStart(2,'0')}-${String(ahora.getDate()).padStart(2,'0')}`;
-  const tempId = Date.now();
-  pagos.unshift({
-    ...obj,
-    id: tempId,
-    fecha_creacion: hoy,
-    created_at: new Date().toISOString(),
-    empresaNombre: emp?.nombre||'',
-    proyectoNombre: proy?.nombre||'',
-  });
-  renderStats();renderTabla();actualizarSelectEmpresas();
-  closeModal('modalNuevo');
-  _insertando = false;
-
-  // Guardar en Supabase en segundo plano sin bloquear
-  sb.from('pagos').insert(obj).then(async ({error})=>{
-    if(error){
-      console.error('Error guardando pago:',error.message);
-      // Si falla, quitar de memoria
-      const idx=pagos.findIndex(p=>p.id===tempId);
-      if(idx>=0) pagos.splice(idx,1);
-      renderStats();renderTabla();
-      alert('Error al guardar el pago: '+error.message);
-    } else {
-      // Recargar este pago con su ID real de Supabase
-      const {data}=await sb.from('pagos')
-        .select('id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)')
-        .eq('empresa_id',obj.empresa_id).eq('id_tercero',obj.id_tercero||'').eq('valor',obj.valor)
-        .order('created_at',{ascending:false}).limit(1);
-      if(data&&data[0]){
-        const idx=pagos.findIndex(p=>p.id===tempId);
-        if(idx>=0){
-          pagos[idx]={...data[0],empresaNombre:data[0].empresa?.nombre||'',proyectoNombre:data[0].proyecto?.nombre||''};
-        }
-      }
-    }
-  });
+  try{
+    const {data,error}=await sb.from('pagos').insert(obj)
+      .select('id,num_egreso,empresa_id,proyecto_id,concepto,id_tercero,nombre_tercero,nombre_pago,tipo,valor,fecha_creacion,fecha_pago,estado,cod_bancolombia,comentario,created_at,empresa:empresa_id(nombre),proyecto:proyecto_id(nombre)')
+      .single();
+    if(error||!data) throw error||new Error('la base de datos no devolvió el pago guardado');
+    pagos.unshift({...data,empresaNombre:data.empresa?.nombre||'',proyectoNombre:data.proyecto?.nombre||''});
+    renderStats();renderTabla();actualizarSelectEmpresas();
+    closeModal('modalNuevo');
+    notificar('Pago guardado correctamente','ok');
+  }catch(e){
+    console.error('Error guardando pago:',e);
+    notificar('NO se guardó el pago: '+msgError(e)+' Tus datos siguen en el formulario.','error');
+  }finally{
+    _insertando = false;
+  }
 }
 
 async function eliminarPago(id){
@@ -1292,19 +1287,22 @@ async function eliminarPago(id){
   const ok=window.confirm('¿Confirma que desea eliminar este pago? Esta acción no se puede deshacer.');
   if(!ok)return;
 
-  // Eliminar de memoria inmediatamente
+  let error=null,filas=null;
+  try{
+    const res=await sb.from('pagos').delete().eq('id',id).select('id');
+    error=res.error;filas=res.data;
+  }catch(e){error=e;}
+
+  if(error||!filas||filas.length===0){
+    console.error('Error eliminando:',error?.message||'0 filas eliminadas');
+    notificar('NO se eliminó el pago: '+(error?msgError(error):'la base de datos no eliminó ninguna fila.'),'error');
+    return;
+  }
+
   const idx=pagos.findIndex(x=>x.id===id);
   if(idx>=0) pagos.splice(idx,1);
   renderStats();renderTabla();
-
-  // Eliminar en Supabase en segundo plano
-  sb.from('pagos').delete().eq('id',id).then(({error})=>{
-    if(error){
-      // Si falla, restaurar el pago en memoria
-      console.error('Error eliminando:',error.message);
-      alert('Error al eliminar: '+error.message);
-    }
-  });
+  notificar('Pago eliminado correctamente','ok');
 }
 
 // --- EDITAR -----------------------------------------------
@@ -1393,7 +1391,7 @@ async function guardarEdicion(){
   if(error||!filas||filas.length===0){
     _guardandoEdicion=false;
     console.error('Error actualizando pago:',error?.message||'0 filas actualizadas');
-    alert('No se pudieron guardar los cambios: '+(error?.message||'la base de datos no permitió actualizar este pago (posible falta de permisos).')+'\n\nEl pago NO fue modificado.');
+    notificar('NO se guardaron los cambios del pago: '+(error?msgError(error):'la base de datos no actualizó ninguna fila.')+' El pago no fue modificado.','error');
     return;
   }
 
@@ -1404,6 +1402,7 @@ async function guardarEdicion(){
   renderStats();renderTabla();
   closeModal('modalEditar');
   editandoId=null;_guardandoEdicion=false;
+  notificar('Cambios guardados correctamente','ok');
 }
 
 // --- APROBACIONES -----------------------------------------
@@ -1468,37 +1467,42 @@ async function aprobar(pagoId, perfilId, rol){
   if(btnApro){btnApro.disabled=true;btnApro.textContent='...';}
 
   const fechaAhora=new Date().toISOString();
+  const fechaPago=fechaAhora.split('T')[0];
 
-  // Actualizar aprobacionesMap en memoria inmediatamente
+  // Guardar primero en Supabase y verificar cada escritura
+  try{
+    const {data:existente,error:eSel}=await sb.from('aprobaciones')
+      .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1);
+    if(eSel) throw eSel;
+    const r1=(existente&&existente.length>0)
+      ? await sb.from('aprobaciones').update({estado:'aprobado',fecha:fechaAhora,rol}).eq('id',existente[0].id).select('id')
+      : await sb.from('aprobaciones').insert({pago_id:pagoId,perfil_id:perfilId,rol,estado:'aprobado',fecha:fechaAhora}).select('id');
+    if(r1.error||!r1.data||r1.data.length===0) throw r1.error||new Error('la base de datos no guardó la aprobación');
+
+    if(rol==='gerencia'){
+      const r2=await sb.from('pagos').update({estado:'Pagada',fecha_pago:fechaPago}).eq('id',pagoId).select('id');
+      if(r2.error||!r2.data||r2.data.length===0) throw r2.error||new Error('la aprobación se guardó pero el pago no pudo marcarse como Pagada');
+    }
+  }catch(e){
+    console.error('Error aprobando:',e);
+    notificar('NO se guardó la aprobación: '+msgError(e),'error');
+    await abrirAprobacion(pagoId);
+    return;
+  }
+
+  // Confirmado: reflejar en memoria
   if(!aprobacionesMap[pagoId]) aprobacionesMap[pagoId]=[];
   const existing=aprobacionesMap[pagoId].find(a=>a.perfil_id===perfilId);
   if(existing){existing.estado='aprobado';existing.fecha=fechaAhora;}
   else aprobacionesMap[pagoId].push({perfil_id:perfilId,rol,estado:'aprobado',fecha:fechaAhora});
-
-  // Si es gerencia → marcar Pagada en memoria
   if(rol==='gerencia'){
     p.estado='Pagada';
-    p.fecha_pago=new Date().toISOString().split('T')[0];
+    p.fecha_pago=fechaPago;
   }
 
   renderStats();renderTabla();
   await abrirAprobacion(pagoId); // refrescar modal con estado nuevo
-
-  // Guardar en Supabase en segundo plano
-  (async()=>{
-    try{
-      const {data:existente}=await sb.from('aprobaciones')
-        .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1);
-      if(existente&&existente.length>0){
-        await sb.from('aprobaciones').update({estado:'aprobado',fecha:fechaAhora,rol}).eq('id',existente[0].id);
-      } else {
-        await sb.from('aprobaciones').insert({pago_id:pagoId,perfil_id:perfilId,rol,estado:'aprobado',fecha:fechaAhora});
-      }
-      if(rol==='gerencia'){
-        await sb.from('pagos').update({estado:'Pagada',fecha_pago:p.fecha_pago}).eq('id',pagoId);
-      }
-    }catch(e){console.error('Error aprobando:',e.message);}
-  })();
+  notificar('Aprobación guardada correctamente','ok');
 }
 
 // ===
