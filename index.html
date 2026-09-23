@@ -1103,7 +1103,7 @@ function renderTabla() {
     if(_verSoloPriorizados && !priorizados.has(p.id)) return false;
 
     // Buscar general
-    const campos = [p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.concepto,p.tipo,p.cod_bancolombia].map(v=>String(v||'').toLowerCase());
+    const campos = [p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.concepto,p.tipo,p.cod_bancolombia,p.comentario].map(v=>String(v||'').toLowerCase());
     const m = !q || campos.some(v=>v.includes(q));
 
     // Empresa
