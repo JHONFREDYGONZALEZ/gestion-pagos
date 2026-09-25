@@ -413,7 +413,7 @@
     <div class="divider"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="closeModal('modalEditar')">Cancelar</button>
-      <button class="btn primary" onclick="guardarEdicion()"><i class="ti ti-check"></i> Guardar cambios</button>
+      <button class="btn primary" id="btn-guardar-edicion" onclick="guardarEdicion()"><i class="ti ti-check"></i> Guardar cambios</button>
     </div>
   </div>
 </div>
@@ -558,10 +558,16 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
   clearTimeout(safetyTimer);
 
-  sb.auth.onAuthStateChange(async (event, session) => {
+  // IMPORTANTE: este aviso NO debe esperar llamadas a Supabase (async/await). La librería lo ejecuta con la sesión
+  // bloqueada; si aquí se consulta Supabase, la sesión se espera a sí misma y todas las peticiones quedan colgadas
+  // (pasaba al volver a la pestaña: la librería vuelve a emitir SIGNED_IN y no se podía guardar hasta refrescar).
+  sb.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN' && session) {
-      await iniciarApp(session.user);
+      if (currentUser && currentUser.id === session.user.id) return; // volver a la pestaña no es un inicio de sesión nuevo
+      currentUser = session.user;
+      setTimeout(() => iniciarApp(session.user), 0);
     } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
       showLogin();
     }
   });
@@ -910,6 +916,15 @@ function notificar(msg,tipo){
   const x=document.createElement('button');x.textContent='×';x.onclick=()=>t.remove();
   t.append(txt,x);cont.appendChild(t);
   if(tipo!=='error') setTimeout(()=>t.remove(),3500);
+}
+// Evita que un guardado se quede "pensando" para siempre si la conexión no responde
+const conLimite=(promesa,ms=20000)=>Promise.race([promesa,new Promise((_,rechazar)=>setTimeout(()=>rechazar(new Error(
+  'la conexión tardó demasiado en responder. Revisa tu internet e intenta de nuevo.')),ms))]);
+function marcarBtn(id,on,htmlNormal){
+  const b=document.getElementById(id);
+  if(!b) return;
+  b.disabled=on;
+  b.innerHTML=on?'Guardando...':htmlNormal;
 }
 function msgError(e){
   const m=String((e&&e.message)||e||'');
@@ -1361,10 +1376,7 @@ async function confirmarGuardarPago(){
 }
 
 function marcarGuardando(on){
-  const b=document.getElementById('btn-guardar-pago');
-  if(!b) return;
-  b.disabled=on;
-  b.innerHTML=on?'Guardando...':'<i class="ti ti-check"></i> Guardar pago';
+  marcarBtn('btn-guardar-pago',on,'<i class="ti ti-check"></i> Guardar pago');
 }
 
 async function insertarPago(obj){
@@ -1402,7 +1414,7 @@ async function eliminarPago(id){
 
   let error=null,filas=null;
   try{
-    const res=await sb.from('pagos').delete().eq('id',id).select('id');
+    const res=await conLimite(sb.from('pagos').delete().eq('id',id).select('id'));
     error=res.error;filas=res.data;
   }catch(e){error=e;}
 
@@ -1513,10 +1525,12 @@ async function guardarEdicion(){
 
   // Guardar en Supabase y confirmar que realmente se actualizó una fila antes de tocar la pantalla
   let error=null,filas=null;
+  marcarBtn('btn-guardar-edicion',true);
   try{
-    const res=await sb.from('pagos').update(updates).eq('id',p.id).select('id');
+    const res=await conLimite(sb.from('pagos').update(updates).eq('id',p.id).select('id'));
     error=res.error;filas=res.data;
   }catch(e){error=e;}
+  marcarBtn('btn-guardar-edicion',false,'<i class="ti ti-check"></i> Guardar cambios');
 
   if(error||!filas||filas.length===0){
     _guardandoEdicion=false;
@@ -1601,16 +1615,16 @@ async function aprobar(pagoId, perfilId, rol){
 
   // Guardar primero en Supabase y verificar cada escritura
   try{
-    const {data:existente,error:eSel}=await sb.from('aprobaciones')
-      .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1);
+    const {data:existente,error:eSel}=await conLimite(sb.from('aprobaciones')
+      .select('id').eq('pago_id',pagoId).eq('perfil_id',perfilId).limit(1));
     if(eSel) throw eSel;
     const r1=(existente&&existente.length>0)
-      ? await sb.from('aprobaciones').update({estado:'aprobado',fecha:fechaAhora,rol}).eq('id',existente[0].id).select('id')
-      : await sb.from('aprobaciones').insert({pago_id:pagoId,perfil_id:perfilId,rol,estado:'aprobado',fecha:fechaAhora}).select('id');
+      ? await conLimite(sb.from('aprobaciones').update({estado:'aprobado',fecha:fechaAhora,rol}).eq('id',existente[0].id).select('id'))
+      : await conLimite(sb.from('aprobaciones').insert({pago_id:pagoId,perfil_id:perfilId,rol,estado:'aprobado',fecha:fechaAhora}).select('id'));
     if(r1.error||!r1.data||r1.data.length===0) throw r1.error||new Error('la base de datos no guardó la aprobación');
 
     if(rol==='gerencia'){
-      const r2=await sb.from('pagos').update({estado:'Pagada',fecha_pago:fechaPago}).eq('id',pagoId).select('id');
+      const r2=await conLimite(sb.from('pagos').update({estado:'Pagada',fecha_pago:fechaPago}).eq('id',pagoId).select('id'));
       if(r2.error||!r2.data||r2.data.length===0) throw r2.error||new Error('la aprobación se guardó pero el pago no pudo marcarse como Pagada');
     }
   }catch(e){
