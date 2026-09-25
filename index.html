@@ -190,6 +190,15 @@
     </div>
     <button class="btn-login" onclick="loginUser()">Ingresar</button>
     <button class="btn-instalar" onclick="instalarApp()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;color:var(--accent);border:1px solid var(--accent);border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;">Instalar aplicación en este equipo</button>
+    <div style="margin-top:14px;text-align:center;font-size:12px;">
+      <a href="#" style="color:var(--text3);" onclick="event.preventDefault();var d=document.getElementById('ayuda-instalar');d.style.display=d.style.display==='none'?'block':'none';">¿Cómo dejar PAGOS en el escritorio?</a>
+      <div id="ayuda-instalar" style="display:none;text-align:left;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--radius);color:var(--text2);line-height:1.6;">
+        <b>Chrome (computador):</b> menú ⋮ → «Transmitir, guardar y compartir» → «Instalar PAGOS…». Si no aparece, use «Crear acceso directo…» y marque «Abrir como ventana».<br>
+        <b>Edge (computador):</b> menú ··· → «Aplicaciones» → «Instalar este sitio como una aplicación».<br>
+        <b>Celular Android:</b> menú ⋮ de Chrome → «Instalar aplicación».<br>
+        <b>iPhone:</b> en Safari, botón Compartir → «Agregar a inicio».
+      </div>
+    </div>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -213,7 +222,7 @@
       <div class="topbar-user">
         <span id="user-nombre"></span>
         <span class="role-badge" id="user-rol-badge"></span>
-        <button class="btn-logout btn-instalar" onclick="instalarApp()" style="display:none;" title="Crear acceso directo de PAGOS en este equipo"><i class="ti ti-download"></i> Instalar</button>
+        <button class="btn-logout btn-instalar-top" onclick="instalarApp()" title="Dejar PAGOS como aplicación con acceso directo en este equipo"><i class="ti ti-download"></i> Instalar</button>
         <button class="btn-logout" onclick="logoutUser()"><i class="ti ti-logout"></i></button>
       </div>
     </div>
@@ -558,17 +567,29 @@ window.addEventListener('beforeinstallprompt', e => {
   _promptInstalar = e;
   document.querySelectorAll('.btn-instalar').forEach(b => b.style.display = '');
 });
+const ocultarBotonesInstalar = () => document.querySelectorAll('.btn-instalar, .btn-instalar-top').forEach(b => b.style.display = 'none');
 window.addEventListener('appinstalled', () => {
   _promptInstalar = null;
-  document.querySelectorAll('.btn-instalar').forEach(b => b.style.display = 'none');
+  ocultarBotonesInstalar();
   notificar('PAGOS quedó instalada: busca el icono "PAGOS" en el escritorio o en el menú de inicio.','ok');
 });
+// Si ya se abrió como aplicación instalada, no hace falta ofrecer instalar
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  window.addEventListener('DOMContentLoaded', ocultarBotonesInstalar);
+}
 async function instalarApp() {
-  if (!_promptInstalar) return;
+  if (!_promptInstalar) {
+    // El navegador no ofreció el aviso (ya instalada antes, o navegador sin soporte): guía manual
+    alert('Para dejar PAGOS en el escritorio:\n\n' +
+      'Chrome: menú ⋮ → Transmitir, guardar y compartir → Instalar PAGOS…\n' +
+      '(si no aparece esa opción: «Crear acceso directo…» y marque «Abrir como ventana»).\n\n' +
+      'Edge: menú ··· → Aplicaciones → Instalar este sitio como una aplicación.');
+    return;
+  }
   _promptInstalar.prompt();
   await _promptInstalar.userChoice;
   _promptInstalar = null;
-  document.querySelectorAll('.btn-instalar').forEach(b => b.style.display = 'none');
+  ocultarBotonesInstalar();
 }
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
