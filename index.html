@@ -195,6 +195,7 @@
       <div id="ayuda-instalar" style="display:none;text-align:left;margin-top:10px;padding:12px;background:var(--bg2);border-radius:var(--radius);color:var(--text2);line-height:1.6;">
         <b>Chrome (computador):</b> menú ⋮ → «Transmitir, guardar y compartir» → «Instalar PAGOS…». Si no aparece, use «Crear acceso directo…» y marque «Abrir como ventana».<br>
         <b>Edge (computador):</b> menú ··· → «Aplicaciones» → «Instalar este sitio como una aplicación».<br>
+        <b>Cualquier navegador (Windows):</b> <a href="/PAGOS.url" download="PAGOS.url" style="color:var(--accent);font-weight:600;">descargar acceso directo</a>; al abrir la descarga, arrástrelo al escritorio. (Si el navegador avisa que el archivo puede ser dañino, elija «Conservar»: es solo un enlace a esta página.)<br>
         <b>Celular Android:</b> menú ⋮ de Chrome → «Instalar aplicación».<br>
         <b>iPhone:</b> en Safari, botón Compartir → «Agregar a inicio».
       </div>
@@ -583,7 +584,11 @@ async function instalarApp() {
     alert('Para dejar PAGOS en el escritorio:\n\n' +
       'Chrome: menú ⋮ → Transmitir, guardar y compartir → Instalar PAGOS…\n' +
       '(si no aparece esa opción: «Crear acceso directo…» y marque «Abrir como ventana»).\n\n' +
-      'Edge: menú ··· → Aplicaciones → Instalar este sitio como una aplicación.');
+      'Edge: menú ··· → Aplicaciones → Instalar este sitio como una aplicación.\n\n' +
+      'Si nada de lo anterior funciona, se descargará un acceso directo para arrastrar al escritorio.');
+    const a = document.createElement('a');
+    a.href = '/PAGOS.url'; a.download = 'PAGOS.url';
+    document.body.appendChild(a); a.click(); a.remove();
     return;
   }
   _promptInstalar.prompt();
