@@ -1156,10 +1156,20 @@ function limpiarTodosFiltros(){
   renderTabla();
 }
 
+// Texto de un pago ya convertido a forma fonética para la búsqueda; se guarda en el propio pago y solo
+// se recalcula si cambia alguno de sus datos (así buscar entre miles de pagos sigue siendo rápido)
+function textoBusqueda(p){
+  const origen=[p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.concepto,p.tipo,p.cod_bancolombia,p.comentario]
+    .map(v=>v||'').join(' ');
+  if(p._busqOrigen!==origen){ p._busqOrigen=origen; p._busqTexto=fonetica(origen); }
+  return p._busqTexto;
+}
+
 function renderTabla() {
   const q = document.getElementById('buscar').value.toLowerCase().trim();
   const qNum = q.replace(/[.,\s]/g,''); // "10.388.673" o "10 388 673" se buscan igual que "10388673"
   const qEsNumero = /^\d+$/.test(qNum);
+  const qTokens = fonetica(q).split(' ').filter(Boolean);
   const fe = g('filtroEstado');
   const femp = g('filtroEmpresa');
   const fcod = document.getElementById('filtroCod').value.trim().toLowerCase();
@@ -1178,7 +1188,8 @@ function renderTabla() {
     // Buscar general
     const campos = [p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.concepto,p.tipo,p.cod_bancolombia,p.comentario].map(v=>String(v||'').toLowerCase());
     const m = !q || campos.some(v=>v.includes(q)) ||
-      (qEsNumero && String(p.id_tercero||'').replace(/\D/g,'').includes(qNum));
+      (qEsNumero && String(p.id_tercero||'').replace(/\D/g,'').includes(qNum)) ||
+      (qTokens.length>0 && qTokens.every(t=>textoBusqueda(p).includes(t)));
 
     // Empresa
     const memp = !femp || String(p.empresa_id||'')==femp;
@@ -1297,9 +1308,21 @@ function autocompletarTercero(){
 let _idxTerceros=null, _sugItems=[], _sugSel=-1;
 const normTxt=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 
-// Clave de un nombre: sin tildes, mayúsculas, signos ni orden de las palabras
-// ("Niño Martha Lucia" y "Martha Lucia Niño" son el mismo tercero)
-const claveNombre=s=>normTxt(s).replace(/[^a-z0-9ñ ]/g,' ').split(/\s+/).filter(Boolean).sort().join(' ');
+// Texto "fonético" para buscar sin importar cómo esté escrito: sin tildes ni mayúsculas, y con las
+// confusiones típicas del español unificadas (Aguiño = Agiño, Gonzales = Gonzalez, Vargas = Bargas, Llanos = Yanos...).
+// Los números no se modifican.
+const fonetica=s=>normTxt(s)
+  .replace(/[^a-z0-9]+/g,' ')
+  .replace(/h/g,'')
+  .replace(/qu([ei])/g,'k$1').replace(/gu([ei])/g,'g$1')
+  .replace(/c([ei])/g,'s$1').replace(/z/g,'s').replace(/[cq]/g,'k')
+  .replace(/[vw]/g,'b').replace(/ll/g,'y')
+  .replace(/([a-z])\1+/g,'$1')
+  .replace(/\s+/g,' ').trim();
+
+// Clave de un nombre: ignora tildes, mayúsculas, signos, variantes de escritura y el orden de las palabras
+// ("Niño Martha Lucia", "Martha Lucia Niño" y "Martha Lucía Nino" son el mismo tercero)
+const claveNombre=s=>fonetica(s).split(' ').filter(Boolean).sort().join(' ');
 const soloDigitos=s=>String(s||'').replace(/\D/g,'');
 
 function construirIndiceTerceros(){
@@ -1309,7 +1332,7 @@ function construirIndiceTerceros(){
     if(!nom) continue;
     const idt=soloDigitos(p.id_tercero);
     const k=idt+'|'+claveNombre(nom);
-    if(!m.has(k)) m.set(k,{id_tercero:idt,nombre_tercero:nom,nombre_pago:p.nombre_pago||'',n:normTxt(nom)});
+    if(!m.has(k)) m.set(k,{id_tercero:idt,nombre_tercero:nom,nombre_pago:p.nombre_pago||'',n:fonetica(nom)});
   }
   _idxTerceros=[...m.values()];
 }
@@ -1326,7 +1349,7 @@ function unificarNombreTercero(id_tercero,nombre){
 }
 
 function sugerirTerceros(){
-  const q=normTxt(document.getElementById('f-nombretercero').value).trim();
+  const q=fonetica(document.getElementById('f-nombretercero').value);
   if(q.length<2){ocultarSugerencias();return;}
   if(!_idxTerceros) construirIndiceTerceros();
   const tokens=q.split(/\s+/);
