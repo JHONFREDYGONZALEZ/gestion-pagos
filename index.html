@@ -109,6 +109,7 @@
   .toast button{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;color:inherit;}
   .toast-ok{background:var(--green-bg);color:var(--green);border-color:#b7dca4;}
   .toast-error{background:#FEE2E2;color:#991B1B;border-color:#FCA5A5;}
+  .toast-aviso{background:var(--orange-bg);color:var(--orange);border-color:#F0C68A;}
 
   /* -- BADGES --------------------------------------- */
   .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
@@ -549,6 +550,7 @@ let editandoId = null;
 let _guardandoEdicion = false;
 let _insertando = false;
 let _pagoPendienteGuardar = null;
+let _avisoTerceroPendiente = null; // aviso de "se usó el nombre ya registrado de la cédula", se muestra tras guardar
 let _dupConfirmadoKey = null; // pago duplicado ya confirmado con "Continuar" (evita repetir la alerta al reintentar)
 let aprobacionId = null;
 let _syncIntervalId = null; // evita registrar el auto-sync más de una vez
@@ -967,11 +969,12 @@ function notificar(msg,tipo){
   let cont=document.getElementById('toast-cont');
   if(!cont){cont=document.createElement('div');cont.id='toast-cont';document.body.appendChild(cont);}
   const t=document.createElement('div');
-  t.className='toast '+(tipo==='error'?'toast-error':'toast-ok');
+  t.className='toast '+(tipo==='error'?'toast-error':tipo==='aviso'?'toast-aviso':'toast-ok');
   const txt=document.createElement('span');txt.textContent=msg;
   const x=document.createElement('button');x.textContent='×';x.onclick=()=>t.remove();
   t.append(txt,x);cont.appendChild(t);
-  if(tipo!=='error') setTimeout(()=>t.remove(),3500);
+  if(tipo==='ok') setTimeout(()=>t.remove(),3500);
+  else if(tipo==='aviso') setTimeout(()=>t.remove(),12000);
 }
 // Evita que un guardado se quede "pensando" para siempre si la conexión no responde
 const conLimite=(promesa,ms=20000)=>Promise.race([promesa,new Promise((_,rechazar)=>setTimeout(()=>rechazar(new Error(
@@ -1337,15 +1340,23 @@ function construirIndiceTerceros(){
   _idxTerceros=[...m.values()];
 }
 
-// Evita crear el mismo tercero con otra escritura: si la cédula ya existe con este mismo nombre (aunque
-// cambie el orden, las tildes o las mayúsculas), se usa la escritura que ya tiene. Si el nombre es distinto
-// (otro beneficiario con la misma cédula) se respeta lo que escribió el usuario.
+// Una cédula = un solo nombre. Si la cédula ya existe, el pago se guarda con el nombre registrado:
+//  - mismo nombre (aunque cambie orden, tildes, mayúsculas o escritura): se usa la escritura que ya tiene.
+//  - nombre distinto: se usa el nombre registrado y se avisa al usuario.
+// Excepción: cédulas que ya tienen varios nombres en los pagos antiguos (por ejemplo, una cédula usada
+// para pagar a varias entidades). Ahí no se sabe cuál es el correcto, así que se respeta lo escrito.
 function unificarNombreTercero(id_tercero,nombre){
   const idt=soloDigitos(id_tercero);
-  if(!idt) return nombre;
+  if(!idt) return {nombre};
+  const delTercero=pagos.filter(p=>soloDigitos(p.id_tercero)===idt && p.nombre_tercero);
+  if(!delTercero.length) return {nombre};                      // cédula nueva
   const k=claveNombre(nombre);
-  const existente=pagos.find(p=>soloDigitos(p.id_tercero)===idt && p.nombre_tercero && claveNombre(p.nombre_tercero)===k);
-  return existente?existente.nombre_tercero:nombre;
+  const igual=delTercero.find(p=>claveNombre(p.nombre_tercero)===k);
+  if(igual) return {nombre:igual.nombre_tercero};
+  if(new Set(delTercero.map(p=>claveNombre(p.nombre_tercero))).size>1) return {nombre}; // cédula compartida
+  const registrado=delTercero[0].nombre_tercero;                // pagos va del más reciente al más antiguo
+  return {nombre:registrado,
+    aviso:`La cédula ${new Intl.NumberFormat('es-CO').format(parseInt(idt))} ya está registrada a nombre de «${registrado}». El pago se guardó con ese nombre. Si es otra persona, revisa la cédula.`};
 }
 
 function sugerirTerceros(){
@@ -1437,7 +1448,10 @@ async function guardarPago(){
   const proyecto_id = g('f-proyecto');
   const concepto = g('f-concepto');
   const id_tercero = g('f-idtercero').replace(/\D/g,'');
-  const nombre_tercero = unificarNombreTercero(g('f-idtercero'), capitalizar(g('f-nombretercero')));
+  const unificado = unificarNombreTercero(g('f-idtercero'), capitalizar(g('f-nombretercero')));
+  const nombre_tercero = unificado.nombre;
+  if(unificado.aviso) document.getElementById('f-nombretercero').value = nombre_tercero;
+  _avisoTerceroPendiente = unificado.aviso || null;
   const nombre_pago = capitalizar(g('f-nombrepago'));
   const tipo = g('f-tipo');
   const valorRaw = g('f-valor').replace(/\D/g,'');
@@ -1499,6 +1513,7 @@ async function insertarPago(obj){
     renderStats();renderTabla();actualizarSelectEmpresas();
     closeModal('modalNuevo');
     notificar('Pago guardado correctamente','ok');
+    if(_avisoTerceroPendiente){ notificar(_avisoTerceroPendiente,'aviso'); _avisoTerceroPendiente=null; }
   }catch(e){
     console.error('Error guardando pago:',e);
     notificar('NO se guardó el pago: '+msgError(e)+' Tus datos siguen en el formulario.','error');
@@ -1610,7 +1625,9 @@ async function guardarEdicion(){
     const proyecto_id=g('e-proyecto');
     const concepto=g('e-concepto');
     const id_tercero=g('e-idtercero').replace(/\D/g,'');
-    const nombre_tercero=unificarNombreTercero(g('e-idtercero'), capitalizar(g('e-nombretercero')));
+    const unificado=unificarNombreTercero(g('e-idtercero'), capitalizar(g('e-nombretercero')));
+    const nombre_tercero=unificado.nombre;
+    _avisoTerceroPendiente=unificado.aviso||null;
     const nombre_pago=capitalizar(g('e-nombrepago'));
     const tipo=g('e-tipo');
     const faltan=[['Pagador',empresa_id],['Proyecto',proyecto_id],['Concepto',concepto],['Identificación',id_tercero],
@@ -1650,6 +1667,7 @@ async function guardarEdicion(){
   closeModal('modalEditar');
   editandoId=null;_guardandoEdicion=false;
   notificar('Cambios guardados correctamente','ok');
+  if(_avisoTerceroPendiente){ notificar(_avisoTerceroPendiente,'aviso'); _avisoTerceroPendiente=null; }
 }
 
 // --- APROBACIONES -----------------------------------------
