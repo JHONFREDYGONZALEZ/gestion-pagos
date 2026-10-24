@@ -1157,7 +1157,9 @@ function limpiarTodosFiltros(){
 }
 
 function renderTabla() {
-  const q = document.getElementById('buscar').value.toLowerCase();
+  const q = document.getElementById('buscar').value.toLowerCase().trim();
+  const qNum = q.replace(/[.,\s]/g,''); // "10.388.673" o "10 388 673" se buscan igual que "10388673"
+  const qEsNumero = /^\d+$/.test(qNum);
   const fe = g('filtroEstado');
   const femp = g('filtroEmpresa');
   const fcod = document.getElementById('filtroCod').value.trim().toLowerCase();
@@ -1175,7 +1177,8 @@ function renderTabla() {
 
     // Buscar general
     const campos = [p.empresaNombre,p.proyectoNombre,p.id_tercero,p.nombre_tercero,p.nombre_pago,p.concepto,p.tipo,p.cod_bancolombia,p.comentario].map(v=>String(v||'').toLowerCase());
-    const m = !q || campos.some(v=>v.includes(q));
+    const m = !q || campos.some(v=>v.includes(q)) ||
+      (qEsNumero && String(p.id_tercero||'').replace(/\D/g,'').includes(qNum));
 
     // Empresa
     const memp = !femp || String(p.empresa_id||'')==femp;
@@ -1294,16 +1297,32 @@ function autocompletarTercero(){
 let _idxTerceros=null, _sugItems=[], _sugSel=-1;
 const normTxt=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 
+// Clave de un nombre: sin tildes, mayúsculas, signos ni orden de las palabras
+// ("Niño Martha Lucia" y "Martha Lucia Niño" son el mismo tercero)
+const claveNombre=s=>normTxt(s).replace(/[^a-z0-9ñ ]/g,' ').split(/\s+/).filter(Boolean).sort().join(' ');
+const soloDigitos=s=>String(s||'').replace(/\D/g,'');
+
 function construirIndiceTerceros(){
   const m=new Map();
   for(const p of pagos){ // pagos viene del más reciente al más antiguo: se conserva el dato más nuevo de cada tercero
     const nom=(p.nombre_tercero||'').trim();
     if(!nom) continue;
-    const idt=String(p.id_tercero||'').replace(/\D/g,'');
-    const k=idt+'|'+normTxt(nom);
+    const idt=soloDigitos(p.id_tercero);
+    const k=idt+'|'+claveNombre(nom);
     if(!m.has(k)) m.set(k,{id_tercero:idt,nombre_tercero:nom,nombre_pago:p.nombre_pago||'',n:normTxt(nom)});
   }
   _idxTerceros=[...m.values()];
+}
+
+// Evita crear el mismo tercero con otra escritura: si la cédula ya existe con este mismo nombre (aunque
+// cambie el orden, las tildes o las mayúsculas), se usa la escritura que ya tiene. Si el nombre es distinto
+// (otro beneficiario con la misma cédula) se respeta lo que escribió el usuario.
+function unificarNombreTercero(id_tercero,nombre){
+  const idt=soloDigitos(id_tercero);
+  if(!idt) return nombre;
+  const k=claveNombre(nombre);
+  const existente=pagos.find(p=>soloDigitos(p.id_tercero)===idt && p.nombre_tercero && claveNombre(p.nombre_tercero)===k);
+  return existente?existente.nombre_tercero:nombre;
 }
 
 function sugerirTerceros(){
@@ -1311,9 +1330,14 @@ function sugerirTerceros(){
   if(q.length<2){ocultarSugerencias();return;}
   if(!_idxTerceros) construirIndiceTerceros();
   const tokens=q.split(/\s+/);
-  _sugItems=_idxTerceros.filter(t=>tokens.every(tk=>t.n.includes(tk)))
-    .sort((a,b)=>(b.n.startsWith(q)-a.n.startsWith(q))||a.n.localeCompare(b.n))
-    .slice(0,8);
+  const qNum=q.replace(/[.,\s]/g,''); // también se puede escribir la cédula, con o sin puntos
+  if(/^\d{3,}$/.test(qNum)){
+    _sugItems=_idxTerceros.filter(t=>t.id_tercero.includes(qNum)).slice(0,8);
+  } else {
+    _sugItems=_idxTerceros.filter(t=>tokens.every(tk=>t.n.includes(tk)))
+      .sort((a,b)=>(b.n.startsWith(q)-a.n.startsWith(q))||a.n.localeCompare(b.n))
+      .slice(0,8);
+  }
   const box=document.getElementById('sug-terceros');
   box.replaceChildren();
   _sugSel=-1;
@@ -1390,7 +1414,7 @@ async function guardarPago(){
   const proyecto_id = g('f-proyecto');
   const concepto = g('f-concepto');
   const id_tercero = g('f-idtercero').replace(/\D/g,'');
-  const nombre_tercero = capitalizar(g('f-nombretercero'));
+  const nombre_tercero = unificarNombreTercero(g('f-idtercero'), capitalizar(g('f-nombretercero')));
   const nombre_pago = capitalizar(g('f-nombrepago'));
   const tipo = g('f-tipo');
   const valorRaw = g('f-valor').replace(/\D/g,'');
@@ -1563,7 +1587,7 @@ async function guardarEdicion(){
     const proyecto_id=g('e-proyecto');
     const concepto=g('e-concepto');
     const id_tercero=g('e-idtercero').replace(/\D/g,'');
-    const nombre_tercero=capitalizar(g('e-nombretercero'));
+    const nombre_tercero=unificarNombreTercero(g('e-idtercero'), capitalizar(g('e-nombretercero')));
     const nombre_pago=capitalizar(g('e-nombrepago'));
     const tipo=g('e-tipo');
     const faltan=[['Pagador',empresa_id],['Proyecto',proyecto_id],['Concepto',concepto],['Identificación',id_tercero],
