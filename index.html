@@ -363,7 +363,7 @@
         <span class="notice" id="f-idtercero-hint" style="display:none;color:var(--accent2);"></span></div>
       <div class="form-group" style="position:relative;"><label>Nombre tercero *</label>
         <input type="text" id="f-nombretercero" placeholder="Razón social o nombre completo" autocomplete="off"
-          oninput="sugerirTerceros()" onkeydown="teclaSugerencias(event)" onblur="ocultarSugerencias()">
+          oninput="this.dataset.auto='';sugerirTerceros()" onkeydown="teclaSugerencias(event)" onblur="ocultarSugerencias()">
         <div id="sug-terceros" class="sug-list" style="display:none;"></div></div>
       <div class="form-group"><label>Nombre a quien se pagó *</label>
         <input type="text" id="f-nombrepago" placeholder="Beneficiario del pago"></div>
@@ -1324,27 +1324,114 @@ function bloquearNombreTercero(on){
   if(on) ocultarSugerencias();
 }
 
+// --- Consulta automática en el RUES ---
+// Se usan los datos abiertos del RUES (Confecámaras) publicados en datos.gov.co: sin clave, sin captcha y
+// accesibles desde el navegador. Solo se consulta cuando el NIT/cédula NO existe en los pagos de la app.
+const RUES_URL='https://www.datos.gov.co/resource/c82u-588k.json';
+const _cacheRues=new Map();
+let _ruesTimer=null, _ruesToken=0;
+
+async function consultarRues(idVal){
+  if(_cacheRues.has(idVal)) return _cacheRues.get(idVal);
+  const url=RUES_URL+'?$select='+encodeURIComponent('razon_social,estado_matricula,categoria_matricula,fecha_actualizacion')
+    +'&$limit=20&$where='+encodeURIComponent(`numero_identificacion='${idVal}'`); // idVal solo trae dígitos
+  const ctrl=new AbortController();
+  const corte=setTimeout(()=>ctrl.abort(),8000);
+  try{
+    const r=await fetch(url,{signal:ctrl.signal});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const filas=await r.json();
+    if(!Array.isArray(filas)) throw new Error('respuesta inesperada');
+    _cacheRues.set(idVal,filas);
+    return filas;
+  } finally { clearTimeout(corte); }
+}
+
+// El RUES abierto trae registros basura de digitación ("NO ASIGANDO", "PENDIENTE REVOCATORIA") y números
+// genéricos (111111111, 123456789...) que figuran con empresas distintas: no se consultan ni se aceptan.
+const NOMBRE_COMODIN=/^\s*(no\s*as|sin\s*(nombre|dato)|pendiente|n\/?a\s*$|no\s*aplica|desconocid)/i;
+const numeroPlausible=n=>!/^(\d)\1+$/.test(n) && !['123456789','1234567890','0123456789','987654321'].includes(n);
+
+// Un mismo NIT puede tener varios registros (matrículas canceladas, sucursales...). Se prefiere el activo.
+// "confiable" = hay matrícula activa y un solo nombre: solo entonces el nombre se bloquea.
+function elegirRazonRues(filas){
+  const utiles=filas.filter(f=>f.razon_social && !NOMBRE_COMODIN.test(f.razon_social));
+  if(!utiles.length) return null;
+  const activas=utiles.filter(f=>f.estado_matricula==='ACTIVA');
+  const base=(activas.length?activas:utiles).slice()
+    .sort((a,b)=>String(b.fecha_actualizacion||'').localeCompare(String(a.fecha_actualizacion||'')));
+  const nombres=[], vistos=new Set();
+  for(const f of base){
+    const n=f.razon_social.trim(), k=claveNombre(n);
+    if(n && !vistos.has(k)){ vistos.add(k); nombres.push(n); }
+  }
+  if(!nombres.length) return null;
+  return {nombre:nombres[0], otros:nombres.slice(1),
+    estado:activas.length?'ACTIVA':(base[0].estado_matricula||'sin estado'),
+    confiable:activas.length>0 && nombres.length===1};
+}
+
+async function buscarEnRues(idVal,token){
+  const hint=document.getElementById('f-idtercero-hint');
+  const nomEl=document.getElementById('f-nombretercero');
+  const pagoEl=document.getElementById('f-nombrepago');
+  const vigente=()=>token===_ruesToken && soloDigitos(document.getElementById('f-idtercero').value)===idVal;
+  const avisar=(txt,ok)=>{ hint.textContent=txt; hint.style.color=ok?'var(--accent2)':'var(--warn)'; hint.style.display='block'; };
+  try{
+    const r=elegirRazonRues(await consultarRues(idVal));
+    if(!vigente()) return;
+    if(!r){ avisar('No aparece en el RUES (no registra entidades públicas ni personas sin matrícula mercantil). Verifique la cédula y escriba el nombre.',false); return; }
+    nomEl.value=capitalizar(r.nombre);
+    nomEl.dataset.auto='1';
+    if(!pagoEl.value) pagoEl.value=nomEl.value;
+    if(r.confiable){
+      bloquearNombreTercero(true);
+      avisar(`✓ Encontrado en el RUES: ${nomEl.value} (matrícula activa). El nombre no se puede editar.`,true);
+    } else if(r.otros.length){
+      avisar(`El RUES muestra varios nombres para este número (${r.otros.slice(0,2).map(capitalizar).join(' · ')}). Verifique que el nombre sea el correcto.`,false);
+    } else {
+      avisar(`El RUES lo muestra con matrícula ${r.estado.toLowerCase()}. Verifique que el nombre sea el correcto.`,false);
+    }
+  }catch(e){
+    if(!vigente()) return;
+    avisar('No se pudo consultar el RUES. Escriba el nombre manualmente.',false);
+  }
+}
+
 function autocompletarTercero(){
   const idVal=document.getElementById('f-idtercero').value.replace(/\D/g,'');
   const hint=document.getElementById('f-idtercero-hint');
   const nomEl=document.getElementById('f-nombretercero');
   const pagoEl=document.getElementById('f-nombrepago');
+  clearTimeout(_ruesTimer); _ruesToken++;  // cancela cualquier consulta al RUES que estuviera pendiente
+  // si el nombre se llenó solo con otra cédula (de la app o del RUES), se borra para que no quede el nombre de otra persona
+  const eraAutomatico=nomEl.readOnly || nomEl.dataset.auto==='1';
   const estabaBloqueado=nomEl.readOnly;
-  // si el nombre venía de una cédula anterior, se borra para que no quede el nombre de otra persona
-  const soltar=()=>{ if(estabaBloqueado){nomEl.value='';pagoEl.value='';} bloquearNombreTercero(false); };
+  const soltar=()=>{ if(eraAutomatico){nomEl.value='';pagoEl.value='';} nomEl.dataset.auto=''; bloquearNombreTercero(false); };
   hint.style.color='var(--accent2)';
   if(!idVal){soltar();hint.style.display='none';return;}
   const match=pagos.find(p=>soloDigitos(p.id_tercero)===idVal && p.nombre_tercero);
   if(match){
     const igualQueAntes=estabaBloqueado && nomEl.value===match.nombre_tercero;
     nomEl.value=match.nombre_tercero;
+    nomEl.dataset.auto='1';
     if(!igualQueAntes) pagoEl.value=match.nombre_pago||'';
     bloquearNombreTercero(true);
     hint.textContent=`✓ Tercero registrado: ${match.nombre_tercero} (el nombre no se puede editar)`;
     hint.style.display='block';
   } else {
     soltar();
-    if(idVal.length>=5){
+    if(idVal.length>=6 && idVal.length<=12 && !numeroPlausible(idVal)){
+      hint.textContent='Ese número no parece una cédula o NIT real (repite el mismo dígito o es una secuencia). Verifíquelo.';
+      hint.style.color='var(--warn)';
+      hint.style.display='block';
+    } else if(idVal.length>=6 && idVal.length<=12){
+      hint.textContent='Cédula nueva. Consultando el RUES…';
+      hint.style.color='var(--text2)';
+      hint.style.display='block';
+      const token=_ruesToken;
+      _ruesTimer=setTimeout(()=>buscarEnRues(idVal,token),500); // espera a que termine de escribir
+    } else if(idVal.length>=5){
       hint.textContent='Cédula nueva: no existe en los pagos registrados. Verifique el número; se creará un tercero nuevo.';
       hint.style.color='var(--warn)';
       hint.style.display='block';
@@ -1490,6 +1577,8 @@ function teclaSugerencias(e){
 
 function openNuevo(){
   _idxTerceros=null; ocultarSugerencias(); _dupConfirmadoKey=null; _terceroPendiente=null;
+  clearTimeout(_ruesTimer); _ruesToken++;
+  document.getElementById('f-nombretercero').dataset.auto='';
   bloquearNombreTercero(false);
   ['idtercero','nombretercero','nombrepago','bancolombia','egreso'].forEach(id=>{
     const el=document.getElementById('f-'+id); if(el) el.value='';
