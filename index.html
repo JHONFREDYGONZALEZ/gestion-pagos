@@ -96,6 +96,8 @@
   .section{max-width:100%;overflow:hidden;}
   .actions-cell{display:flex;gap:4px;align-items:center;}
 
+  .form-group input.campo-bloqueado{background:var(--bg2);color:var(--text2);cursor:not-allowed;border-style:dashed;}
+
   /* -- SUGERENCIAS DE TERCEROS ---------------------- */
   .sug-list{position:absolute;left:0;right:0;top:100%;z-index:60;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);max-height:240px;overflow-y:auto;margin-top:2px;}
   .sug-item{padding:8px 10px;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
@@ -502,6 +504,24 @@
   </div>
 </div>
 
+<!-- CONFIRMAR TERCERO -->
+<div class="modal-bg" id="modalConfirmaTercero">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title"><i class="ti ti-user-check" style="color:var(--accent);"></i> Confirme el tercero</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:1rem;">Verifique el <b>nombre y los apellidos</b> antes de continuar. Elegir el tercero equivocado registra el pago a otra persona.</div>
+    <div style="background:var(--accent-light);border:1px solid #CFCBF3;border-radius:var(--radius);padding:14px;">
+      <div id="ct-nombre" style="font-size:17px;font-weight:700;color:var(--accent);word-break:break-word;"></div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px;">Cédula / NIT: <strong id="ct-cedula"></strong></div>
+    </div>
+    <div id="ct-contexto" style="font-size:12px;color:var(--text3);margin-top:10px;line-height:1.5;"></div>
+    <div class="divider"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('modalConfirmaTercero')"><i class="ti ti-x"></i> No, buscar otro</button>
+      <button class="btn primary" id="ct-confirmar" onclick="confirmarTercero()"><i class="ti ti-check"></i> Sí, es este tercero</button>
+    </div>
+  </div>
+</div>
+
 <!-- DUPLICADO -->
 <div class="modal-bg" id="modalDuplicado">
   <div class="modal" style="max-width:460px;">
@@ -764,7 +784,7 @@ async function loginUser() {
 }
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') loginUser();
-  if (e.key === 'Escape') { const m = document.querySelector('.modal-bg.open'); if (m) closeModal(m.id); }
+  if (e.key === 'Escape') { const abiertos = document.querySelectorAll('.modal-bg.open'); const m = abiertos[abiertos.length-1]; if (m) closeModal(m.id); }
 });
 
 async function logoutUser() {
@@ -1294,17 +1314,42 @@ function mostrarMasFilas(){
 // ===
 // CRUD PAGOS
 // ===
+// El nombre del tercero lo define la cédula: si la cédula ya existe, el nombre se llena solo y queda bloqueado
+function bloquearNombreTercero(on){
+  const el=document.getElementById('f-nombretercero');
+  if(!el) return;
+  el.readOnly=on;
+  el.classList.toggle('campo-bloqueado',on);
+  el.title=on?'El nombre lo define la cédula registrada. Para otro tercero, cambie la cédula.':'';
+  if(on) ocultarSugerencias();
+}
+
 function autocompletarTercero(){
   const idVal=document.getElementById('f-idtercero').value.replace(/\D/g,'');
   const hint=document.getElementById('f-idtercero-hint');
-  if(!idVal){hint.style.display='none';return;}
-  const match=pagos.find(p=>String(p.id_tercero||'').replace(/\D/g,'')===idVal);
+  const nomEl=document.getElementById('f-nombretercero');
+  const pagoEl=document.getElementById('f-nombrepago');
+  const estabaBloqueado=nomEl.readOnly;
+  // si el nombre venía de una cédula anterior, se borra para que no quede el nombre de otra persona
+  const soltar=()=>{ if(estabaBloqueado){nomEl.value='';pagoEl.value='';} bloquearNombreTercero(false); };
+  hint.style.color='var(--accent2)';
+  if(!idVal){soltar();hint.style.display='none';return;}
+  const match=pagos.find(p=>soloDigitos(p.id_tercero)===idVal && p.nombre_tercero);
   if(match){
-    document.getElementById('f-nombretercero').value=match.nombre_tercero||'';
-    document.getElementById('f-nombrepago').value=match.nombre_pago||'';
-    hint.textContent=`✓ Tercero encontrado: ${match.nombre_tercero}`;
+    const igualQueAntes=estabaBloqueado && nomEl.value===match.nombre_tercero;
+    nomEl.value=match.nombre_tercero;
+    if(!igualQueAntes) pagoEl.value=match.nombre_pago||'';
+    bloquearNombreTercero(true);
+    hint.textContent=`✓ Tercero registrado: ${match.nombre_tercero} (el nombre no se puede editar)`;
     hint.style.display='block';
-  } else { hint.style.display='none'; }
+  } else {
+    soltar();
+    if(idVal.length>=5){
+      hint.textContent='Cédula nueva: no existe en los pagos registrados. Verifique el número; se creará un tercero nuevo.';
+      hint.style.color='var(--warn)';
+      hint.style.display='block';
+    } else { hint.style.display='none'; }
+  }
 }
 
 // --- Sugerencias de terceros al escribir el nombre ---
@@ -1335,7 +1380,8 @@ function construirIndiceTerceros(){
     if(!nom) continue;
     const idt=soloDigitos(p.id_tercero);
     const k=idt+'|'+claveNombre(nom);
-    if(!m.has(k)) m.set(k,{id_tercero:idt,nombre_tercero:nom,nombre_pago:p.nombre_pago||'',n:fonetica(nom)});
+    if(!m.has(k)) m.set(k,{id_tercero:idt,nombre_tercero:nom,nombre_pago:p.nombre_pago||'',n:fonetica(nom),cant:0});
+    m.get(k).cant++;
   }
   _idxTerceros=[...m.values()];
 }
@@ -1380,7 +1426,7 @@ function sugerirTerceros(){
     const d=document.createElement('div');d.className='sug-item';
     const nom=document.createElement('span');nom.textContent=t.nombre_tercero;
     const idt=document.createElement('small');
-    idt.textContent=t.id_tercero?new Intl.NumberFormat('es-CO').format(parseInt(t.id_tercero)):'sin identificación';
+    idt.textContent=(t.id_tercero?new Intl.NumberFormat('es-CO').format(parseInt(t.id_tercero)):'sin identificación')+' · '+t.cant+(t.cant===1?' pago':' pagos');
     d.append(nom,idt);
     d.addEventListener('mousedown',e=>{e.preventDefault();elegirTercero(i);}); // mousedown: llega antes del blur del campo
     box.appendChild(d);
@@ -1388,16 +1434,36 @@ function sugerirTerceros(){
   box.style.display='block';
 }
 
+// Al elegir un tercero de la lista no se aplica de inmediato: primero se pide confirmar nombre y apellidos
+let _terceroPendiente=null;
+
 function elegirTercero(i){
   const t=_sugItems[i];if(!t)return;
-  const idEl=document.getElementById('f-idtercero');
-  idEl.value=t.id_tercero?new Intl.NumberFormat('es-CO').format(parseInt(t.id_tercero)):'';
-  document.getElementById('f-nombretercero').value=t.nombre_tercero;
-  document.getElementById('f-nombrepago').value=t.nombre_pago;
-  const hint=document.getElementById('f-idtercero-hint');
-  hint.textContent=`✓ Tercero seleccionado: ${t.nombre_tercero}`;
-  hint.style.display='block';
+  _terceroPendiente=t;
+  const idt=t.id_tercero||'';
+  const delTercero=pagos.filter(p=>idt?soloDigitos(p.id_tercero)===idt:claveNombre(p.nombre_tercero)===claveNombre(t.nombre_tercero));
+  const ultimo=delTercero[0]; // pagos va del más reciente al más antiguo
+  document.getElementById('ct-nombre').textContent=t.nombre_tercero;
+  document.getElementById('ct-cedula').textContent=idt?new Intl.NumberFormat('es-CO').format(parseInt(idt)):'sin identificación';
+  document.getElementById('ct-contexto').textContent=ultimo
+    ?`${delTercero.length} pago${delTercero.length!==1?'s':''} registrado${delTercero.length!==1?'s':''}. Último: ${fmtDate(ultimo.fecha_creacion)} · ${ultimo.empresaNombre||'—'} · ${ultimo.proyectoNombre||'—'} · ${fmt(ultimo.valor)}`
+    :'';
   ocultarSugerencias();
+  document.getElementById('modalConfirmaTercero').classList.add('open');
+  setTimeout(()=>document.getElementById('ct-confirmar').focus(),60);
+}
+
+function confirmarTercero(){
+  const t=_terceroPendiente;
+  if(!t) return;
+  closeModal('modalConfirmaTercero');
+  if(t.id_tercero){
+    document.getElementById('f-idtercero').value=new Intl.NumberFormat('es-CO').format(parseInt(t.id_tercero));
+    autocompletarTercero(); // llena el nombre desde la cédula y lo bloquea
+  } else {
+    document.getElementById('f-nombretercero').value=t.nombre_tercero;
+    document.getElementById('f-nombrepago').value=t.nombre_pago;
+  }
 }
 
 function ocultarSugerencias(){
@@ -1423,7 +1489,8 @@ function teclaSugerencias(e){
 }
 
 function openNuevo(){
-  _idxTerceros=null; ocultarSugerencias(); _dupConfirmadoKey=null;
+  _idxTerceros=null; ocultarSugerencias(); _dupConfirmadoKey=null; _terceroPendiente=null;
+  bloquearNombreTercero(false);
   ['idtercero','nombretercero','nombrepago','bancolombia','egreso'].forEach(id=>{
     const el=document.getElementById('f-'+id); if(el) el.value='';
   });
@@ -1431,7 +1498,8 @@ function openNuevo(){
   const fco=document.getElementById('f-concepto'); if(fco) fco.value='';
   const ft=document.getElementById('f-tipo'); if(ft) ft.value='';
   const fv=document.getElementById('f-valor'); if(fv) fv.value='';
-  document.getElementById('f-idtercero-hint').style.display='none';
+  const hintId=document.getElementById('f-idtercero-hint');
+  hintId.style.display='none'; hintId.style.color='var(--accent2)';
   // Resetear empresa y proyecto
   const fe=document.getElementById('f-empresa'); if(fe) fe.value='';
   const fp=document.getElementById('f-proyecto');
@@ -1950,6 +2018,10 @@ function closeModal(id){
   if(id==='modalAprobacion')aprobacionId=null;
   if(id==='modalImport'){document.getElementById('import-status').textContent='';document.getElementById('fileInput').value='';}
   if(id==='modalDuplicado')_pagoPendienteGuardar=null;
+  if(id==='modalConfirmaTercero'){
+    _terceroPendiente=null;
+    setTimeout(()=>{const n=document.getElementById('f-nombretercero'); if(n&&!n.readOnly) n.focus();},0);
+  }
 }
 
 // ===
