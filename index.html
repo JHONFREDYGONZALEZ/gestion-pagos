@@ -283,7 +283,7 @@
           </select>
           <input type="text" placeholder="Cód Banco..." id="filtroCod" oninput="guardarFiltros()" style="width:130px;">
           <input type="hidden" id="filtroNombre" value="">
-          <button onclick="aplicarFiltros()" style="padding:9px 20px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">🔍 Filtrar</button>
+          <button id="btn-filtrar" onclick="aplicarFiltros()" style="padding:9px 20px;background:var(--accent);color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;">🔍 Filtrar</button>
           <button onclick="limpiarTodosFiltros()" style="padding:9px 14px;background:var(--bg2);color:var(--text2);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;">✕ Limpiar</button>
         </div>
 
@@ -784,6 +784,8 @@ async function loginUser() {
 }
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') loginUser();
+  // Enter en cualquier casilla de la barra de filtros equivale a pulsar "Filtrar"
+  else if (e.key === 'Enter' && e.target.tagName === 'INPUT' && e.target.closest('#filtros-bar')) { e.preventDefault(); aplicarFiltros(); }
   if (e.key === 'Escape') { const abiertos = document.querySelectorAll('.modal-bg.open'); const m = abiertos[abiertos.length-1]; if (m) closeModal(m.id); }
 });
 
@@ -915,6 +917,7 @@ async function cargarPagos() {
     notificar('No se pudieron cargar los pagos: '+msgError(error),'error');
     return;
   }
+  if(miCarga !== _cargaId) return; // mientras tanto empezó otra carga (por ejemplo al filtrar): no pisarla con datos viejos
   pagos = (data||[]).map(mapPago);
   // cargar el resto en segundo plano sin bloquear la UI
   cargarAprobacionesYResto(miCarga, count || pagos.length);
@@ -1163,10 +1166,57 @@ async function sincronizar(){
   hide('loading');
 }
 
-function aplicarFiltros(){
+// Trae de Supabase TODOS los pagos y aprobaciones y los reemplaza de una sola vez (sin pantallas a medias),
+// para que el filtro incluya lo que otros usuarios acaban de cargar.
+async function refrescarDatos(){
+  const miCarga = ++_cargaId; // invalida cualquier carga anterior que siga en curso
+  const pagina = (desde) => sb.from('pagos').select(COLS_PAGOS)
+    .order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(desde, desde + 999);
+  const primera = await conLimite(sb.from('pagos').select(COLS_PAGOS, { count: 'exact' })
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(1000));
+  if(primera.error) throw primera.error;
+  const total = primera.count || (primera.data||[]).length;
+  const pedidos = [];
+  for(let d = 1000; d < total; d += 1000) pedidos.push(pagina(d));
+  const [resto, apro] = await Promise.all([
+    conLimite(Promise.all(pedidos)),
+    conLimite(sb.from('aprobaciones').select('pago_id,perfil_id,rol,estado').eq('estado','aprobado')),
+  ]);
+  const fallo = resto.find(r => r.error || !r.data);
+  if(fallo) throw fallo.error || new Error('respuesta incompleta');
+  if(apro.error) throw apro.error;
+  if(miCarga !== _cargaId) return; // llegó una carga más reciente: esa es la que vale
+
+  // si entró un pago nuevo mientras se leían las páginas, una fila puede repetirse: se deja una sola por id
+  const porId = new Map();
+  [primera.data, ...resto.map(r => r.data)].forEach(lista => (lista||[]).forEach(p => { if(!porId.has(p.id)) porId.set(p.id, mapPago(p)); }));
+  pagos = [...porId.values()];
+  aprobacionesMap = {};
+  (apro.data||[]).forEach(a => { (aprobacionesMap[a.pago_id] = aprobacionesMap[a.pago_id] || []).push(a); });
+  _aprobacionesCargadas = true;
+  _idxTerceros = null; // las sugerencias de terceros se reconstruyen con los pagos nuevos
+}
+
+let _refrescando = false;
+async function aplicarFiltros(){
   guardarFiltros();
-  _limiteFilas=FILAS_POR_BLOQUE;
-  renderTabla();
+  _limiteFilas = FILAS_POR_BLOQUE;
+  if(_refrescando) return;
+  _refrescando = true;
+  const btn = document.getElementById('btn-filtrar');
+  const textoBtn = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.textContent = 'Actualizando…'; }
+  try{
+    await refrescarDatos();
+  }catch(e){
+    console.error('Error actualizando antes de filtrar:', e);
+    notificar('No se pudo actualizar desde el servidor ('+msgError(e)+'). Se filtraron los datos que ya estaban cargados.','aviso');
+  }finally{
+    _refrescando = false;
+    if(btn){ btn.disabled = false; btn.innerHTML = textoBtn; }
+    renderStats(); renderTabla();
+  }
 }
 
 function limpiarTodosFiltros(){
