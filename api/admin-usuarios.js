@@ -4,8 +4,7 @@
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zcrwgoydzuqocwrpcrld.supabase.co';
 // Clave pública (la misma que usa la página en el navegador). Sirve para preguntarle a Supabase quién es el
 // usuario que llama. Se puede cambiar con la variable SUPABASE_PUBLIC_KEY sin tocar el código.
-const PUBLIC_KEY = process.env.SUPABASE_PUBLIC_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjcndnb3lkenVxb2N3cnBjcmxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4ODEzNTYsImV4cCI6MjA5OTQ1NzM1Nn0.gHDb5ZJFN-APN6w10F9zpyVCQwVo3pAU5BbG4wuz13o';
+const PUBLIC_KEY = process.env.SUPABASE_PUBLIC_KEY || 'sb_publishable_v4k6hlQ-zaU-7LXlgSQDMA_LpAL4-k-';
 const ROLES_VALIDOS = ['pagador', 'profesional', 'gerencia', 'admin'];
 const ROLES_QUE_ADMINISTRAN = ['admin'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
