@@ -2,6 +2,10 @@
 // La clave service_role vive SOLO aquí, en la variable de entorno SUPABASE_SERVICE_ROLE_KEY (nunca en el navegador).
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://zcrwgoydzuqocwrpcrld.supabase.co';
+// Clave pública (la misma que usa la página en el navegador). Sirve para preguntarle a Supabase quién es el
+// usuario que llama. Se puede cambiar con la variable SUPABASE_PUBLIC_KEY sin tocar el código.
+const PUBLIC_KEY = process.env.SUPABASE_PUBLIC_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpjcndnb3lkenVxb2N3cnBjcmxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4ODEzNTYsImV4cCI6MjA5OTQ1NzM1Nn0.gHDb5ZJFN-APN6w10F9zpyVCQwVo3pAU5BbG4wuz13o';
 const ROLES_VALIDOS = ['pagador', 'profesional', 'gerencia', 'admin'];
 const ROLES_QUE_ADMINISTRAN = ['admin'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -14,11 +18,13 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return fallo(405, 'Método no permitido');
   if (!SERVICE_KEY) return fallo(500, 'El servidor no está configurado (falta SUPABASE_SERVICE_ROLE_KEY en Vercel).');
 
+  // Las claves nuevas de Supabase (sb_secret_...) no son JWT: van solo en "apikey". Las antiguas (JWT) van en ambos.
+  const claveNueva = SERVICE_KEY.startsWith('sb_secret_');
   const admin = (ruta, opciones = {}) => fetch(SUPABASE_URL + ruta, {
     ...opciones,
     headers: {
       apikey: SERVICE_KEY,
-      Authorization: 'Bearer ' + SERVICE_KEY,
+      ...(claveNueva ? {} : { Authorization: 'Bearer ' + SERVICE_KEY }),
       'Content-Type': 'application/json',
       ...(opciones.headers || {}),
     },
@@ -29,7 +35,7 @@ module.exports = async (req, res) => {
     const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!token) return fallo(401, 'Sesión no válida. Inicia sesión de nuevo.');
     const rUser = await fetch(SUPABASE_URL + '/auth/v1/user', {
-      headers: { apikey: SERVICE_KEY, Authorization: 'Bearer ' + token },
+      headers: { apikey: PUBLIC_KEY, Authorization: 'Bearer ' + token },
     });
     if (!rUser.ok) return fallo(401, 'Sesión no válida. Inicia sesión de nuevo.');
     const quien = await rUser.json();
